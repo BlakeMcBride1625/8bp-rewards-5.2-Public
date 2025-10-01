@@ -630,21 +630,18 @@ class EightBallPoolClaimer {
   async claimRewards() {
     console.log(`🚀 Starting 8ball pool reward claimer for ${this.userIds.length} users...`);
     console.log(`👥 Users: ${this.userIds.join(', ')}`);
+    console.log(`\n🚀 Running ${this.userIds.length} claims in PARALLEL for maximum speed!`);
 
-    const results = [];
-    
-    for (let i = 0; i < this.userIds.length; i++) {
-      const userId = this.userIds[i];
-      console.log(`\n📋 Processing user ${i + 1}/${this.userIds.length}: ${userId}`);
+    // Process all users in parallel! 🚀
+    const claimPromises = this.userIds.map(async (userId, index) => {
+      console.log(`\n📋 Starting user ${index + 1}/${this.userIds.length}: ${userId}`);
       
       const result = await this.claimRewardsForUser(userId);
-      results.push({ userId, ...result });
-      
-      if (i < this.userIds.length - 1) {
-        console.log(`⏳ Waiting ${this.delayBetweenUsers}ms before next user...`);
-        await new Promise(resolve => setTimeout(resolve, this.delayBetweenUsers));
-      }
-    }
+      return { userId, ...result };
+    });
+    
+    // Wait for all claims to complete
+    const results = await Promise.all(claimPromises);
 
     // Summary
     const successes = results.filter(r => r.success).length;
@@ -676,18 +673,34 @@ class EightBallPoolClaimer {
   }
 
   startScheduler() {
-    console.log('📅 Starting daily scheduler...');
-    console.log('🕛 Will run at 12:00 AM and 12:00 PM daily');
+    console.log('📅 Starting automated scheduler...');
+    console.log('🕛 Will run 4 times daily (every 6 hours):');
+    console.log('   - 00:00 (12:00 AM midnight) UTC');
+    console.log('   - 06:00 (6:00 AM) UTC');
+    console.log('   - 12:00 (12:00 PM noon) UTC');
+    console.log('   - 18:00 (6:00 PM) UTC');
     
-    // Schedule for 12:00 AM (midnight)
+    // Schedule at 00:00 (midnight) UTC
     cron.schedule('0 0 * * *', async () => {
-      console.log('🕛 Midnight claim starting...');
+      console.log('\n🕐 00:00 UTC - Running scheduled claim...');
       await this.runDailyClaim();
     });
 
-    // Schedule for 12:00 PM (noon)
+    // Schedule at 06:00 (6 AM) UTC
+    cron.schedule('0 6 * * *', async () => {
+      console.log('\n🕐 06:00 UTC - Running scheduled claim...');
+      await this.runDailyClaim();
+    });
+
+    // Schedule at 12:00 (noon) UTC
     cron.schedule('0 12 * * *', async () => {
-      console.log('🕛 Noon claim starting...');
+      console.log('\n🕐 12:00 UTC - Running scheduled claim...');
+      await this.runDailyClaim();
+    });
+
+    // Schedule at 18:00 (6 PM) UTC
+    cron.schedule('0 18 * * *', async () => {
+      console.log('\n🕐 18:00 UTC - Running scheduled claim...');
       await this.runDailyClaim();
     });
 

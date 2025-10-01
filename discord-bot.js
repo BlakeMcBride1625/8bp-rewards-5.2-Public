@@ -18,7 +18,12 @@ class DiscordBot {
       if (success) {
         console.log('✅ Discord Bot is now running!');
         console.log('💡 Use slash commands in your Discord server');
-        console.log('📋 Available commands: /add, /list, /remove, /claim, /clear, /help');
+        console.log('📋 Available commands:');
+        console.log('   /register - Register an 8BP account');
+        console.log('   /list-accounts - List all registered accounts');
+        console.log('   /deregister - Remove a registration');
+        console.log('   /check-accounts - Check account status');
+        console.log('   /help - Show help information');
         
         // Keep the bot running
         process.on('SIGINT', async () => {

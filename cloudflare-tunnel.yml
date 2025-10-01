@@ -1,0 +1,25 @@
+# Cloudflare Tunnel Configuration for 8BP Rewards System
+# This file configures Cloudflare Tunnels to route traffic to your local services
+
+tunnel: 8bp-rewards-tunnel
+credentials-file: /root/.cloudflared/8bp-rewards-tunnel.json
+
+ingress:
+  # Frontend (React app)
+  - hostname: 8bp.epildevconnect.uk
+    path: /8bp-rewards/*
+    service: http://localhost:2500
+    originRequest:
+      httpHostHeader: 8bp.epildevconnect.uk
+
+  # Backend API
+  - hostname: 8bp.epildevconnect.uk
+    path: /8bp-rewards/api/*
+    service: http://localhost:2600
+    originRequest:
+      httpHostHeader: 8bp.epildevconnect.uk
+
+  # Catch-all rule (must be last)
+  - service: http_status:404
+
+

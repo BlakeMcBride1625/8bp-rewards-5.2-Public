@@ -1,34 +1,47 @@
-# 8ball Pool Configuration
-# Add multiple user IDs separated by commas
-USER_IDS=1826254746,1234567890,9876543210
-
-# Alternative: Single user ID (if you prefer this format)
-# USER_ID=1826254746
-
-# Shop URL
-SHOP_URL=https://8ballpool.com/en/shop
-
-# Browser settings
-HEADLESS=true
-TIMEOUT=60000
-
-# Delay between users (in milliseconds) - helps avoid rate limiting
-DELAY_BETWEEN_USERS=10000
+# MongoDB Configuration
+MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/8bp-rewards
 
 # Discord Bot Configuration
 DISCORD_TOKEN=your_discord_bot_token_here
-DISCORD_CHANNEL_ID=your_channel_id_here
-DISCORD_GUILD_ID=your_server_id_here
+DISCORD_CLIENT_ID=your_discord_oauth_client_id_here
+DISCORD_CLIENT_SECRET=your_discord_oauth_client_secret_here
+OAUTH_REDIRECT_URI=https://8bp.epildevconnect.uk/8bp-rewards/auth/discord/callback
+ALLOWED_ADMINS=850726663289700373,1111185974748270622
+SCHEDULER_CHANNEL_ID=your_scheduler_channel_id_here
+REWARDS_CHANNEL_ID=your_rewards_channel_id_here
+REGISTRATION_CHANNEL_ID=1422725910196518922
 
-# Special Discord users who get DMs (comma-separated Discord IDs)
-DISCORD_SPECIAL_USERS=850726663289700373,1111185974748270622
+# Server Ports
+FRONTEND_PORT=2500
+BACKEND_PORT=2600
 
-# MongoDB Configuration
-# Local MongoDB (default)
-MONGODB_URI=mongodb://localhost:27017/8bp-rewards
+# Public URLs
+PUBLIC_URL=https://8bp.epildevconnect.uk/8bp-rewards
+HOME_URL=https://8bp.epildevconnect.uk/8bp-rewards/home
+REGISTER_URL=https://8bp.epildevconnect.uk/8bp-rewards/register
+ADMIN_DASHBOARD_URL=https://8bp.epildevconnect.uk/8bp-rewards/admin-dashboard
+CONTACT_URL=https://8bp.epildevconnect.uk/8bp-rewards/contact
+SYSTEM_STATUS_URL=https://8bp.epildevconnect.uk/8bp-rewards/system-status
+LEADERBOARD_URL=https://8bp.epildevconnect.uk/8bp-rewards/leaderboard
 
-# For MongoDB Atlas (cloud), use format like:
-# MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/8bp-rewards
+# Nodemailer SMTP Configuration
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_app_password_here
+SMTP_SECURE=true
+MAIL_FROM=your_email@gmail.com
+MAIL_TO=admin@epildevconnect.uk
 
-# For production, you can also use:
-# MONGODB_URI=mongodb://username:password@host:port/database
+# Node Environment (set to 'production' on VPS)
+NODE_ENV=production
+
+# JWT Secret for session management
+JWT_SECRET=your_super_secret_jwt_key_here_change_this_in_production
+
+# Legacy 8ball Pool Configuration (for backward compatibility)
+USER_IDS=1826254746,1234567890,9876543210
+SHOP_URL=https://8ballpool.com/en/shop
+HEADLESS=true
+TIMEOUT=60000
+DELAY_BETWEEN_USERS=10000

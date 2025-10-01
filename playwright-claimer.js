@@ -1,19 +1,48 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const cron = require('node-cron');
+const DatabaseService = require('./services/database-service');
+const Registration = require('./models/Registration');
+const mongoose = require('mongoose');
 require('dotenv').config();
 
-// Get user IDs from environment
-function getUserIds() {
-  const userIds = process.env.USER_IDS;
-  const singleUserId = process.env.USER_ID;
-  
-  if (userIds) {
-    return userIds.split(',').map(id => id.trim()).filter(id => id.length > 0);
-  } else if (singleUserId) {
-    return [singleUserId.trim()];
-  } else {
-    return ['3057211056']; // Default fallback
+// ClaimRecord schema for saving claim results (matching backend TypeScript model)
+const ClaimRecordSchema = new mongoose.Schema({
+  eightBallPoolId: { type: String, required: true, index: true },
+  websiteUserId: { type: String, required: true }, // Added to match backend model
+  status: { type: String, enum: ['success', 'failed'], required: true },
+  itemsClaimed: [String],
+  error: String,
+  claimedAt: { type: Date, default: Date.now },
+  schedulerRun: Date
+}, { timestamps: true, collection: 'claim_records' });
+
+const ClaimRecord = mongoose.models.ClaimRecord || mongoose.model('ClaimRecord', ClaimRecordSchema);
+
+// Get user IDs from database instead of environment
+async function getUserIdsFromDatabase() {
+  try {
+    const dbService = new DatabaseService();
+    await dbService.connect();
+    
+    const registrations = await Registration.getAllRegistrations();
+    console.log(`📋 Found ${registrations.length} registered users in database`);
+    
+    // Filter out blocked users
+    const activeUsers = registrations.filter(reg => !reg.isBlocked);
+    const blockedCount = registrations.length - activeUsers.length;
+    
+    if (blockedCount > 0) {
+      console.log(`⚠️ Skipping ${blockedCount} blocked users`);
+    }
+    
+    return activeUsers.map(reg => ({
+      eightBallPoolId: reg.eightBallPoolId,
+      username: reg.username
+    }));
+  } catch (error) {
+    console.error('❌ Error fetching users from database:', error.message);
+    return [];
   }
 }
 
@@ -476,55 +505,108 @@ async function logout(page) {
 
 // Main function to claim rewards for all users
 async function claimRewards() {
-  const userIds = getUserIds();
-  console.log(`🚀 Starting 8ball pool reward claimer for ${userIds.length} users...`);
-  console.log(`👥 Users: ${userIds.join(', ')}`);
+  // Get users from database
+  const users = await getUserIdsFromDatabase();
+  
+  if (users.length === 0) {
+    console.log('⚠️ No registered users found in database');
+    return;
+  }
+  
+  console.log(`🚀 Starting 8ball pool reward claimer for ${users.length} users...`);
+  console.log(`👥 Users: ${users.map(u => `${u.username} (${u.eightBallPoolId})`).join(', ')}`);
   
   let successCount = 0;
   let failureCount = 0;
+  const schedulerRunTime = new Date();
   
-  for (let i = 0; i < userIds.length; i++) {
-    const userId = userIds[i];
-    console.log(`\n📋 Processing user ${i + 1}/${userIds.length}: ${userId}`);
+  // Process all users in parallel for speed! 🚀
+  console.log(`\n🚀 Running ${users.length} claims in PARALLEL for maximum speed!`);
+  
+  const claimPromises = users.map(async (user, index) => {
+    console.log(`\n📋 Starting user ${index + 1}/${users.length}: ${user.username} (${user.eightBallPoolId})`);
     
     try {
-      await claimRewardsForUser(userId);
-      successCount++;
-      console.log(`✅ Successfully processed user: ${userId}`);
+      await claimRewardsForUser(user.eightBallPoolId);
+      console.log(`✅ Successfully processed user: ${user.username}`);
+      
+      // Save successful claim to database
+      const claimRecord = new ClaimRecord({
+        eightBallPoolId: user.eightBallPoolId,
+        websiteUserId: user.username, // Added to match backend model
+        status: 'success',
+        itemsClaimed: ['Daily Reward', 'Free Items'], // TODO: Parse actual items from claim result
+        schedulerRun: schedulerRunTime,
+        claimedAt: new Date()
+      });
+      await claimRecord.save();
+      console.log(`💾 Saved claim record for ${user.username} to database`);
+      
+      return { success: true, user: user.username };
     } catch (error) {
-      failureCount++;
-      console.log(`❌ Failed to process user ${userId}: ${error.message}`);
+      console.log(`❌ Failed to process user ${user.username}: ${error.message}`);
+      
+      // Save failed claim to database
+      const claimRecord = new ClaimRecord({
+        eightBallPoolId: user.eightBallPoolId,
+        websiteUserId: user.username, // Added to match backend model
+        status: 'failed',
+        itemsClaimed: [],
+        error: error.message,
+        schedulerRun: schedulerRunTime,
+        claimedAt: new Date()
+      });
+      await claimRecord.save();
+      console.log(`💾 Saved failed claim record for ${user.username} to database`);
+      
+      return { success: false, user: user.username, error: error.message };
     }
-    
-    // Wait between users to avoid rate limiting
-    if (i < userIds.length - 1) {
-      console.log('⏳ Waiting 5 seconds before next user...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
-    }
-  }
+  });
+  
+  // Wait for all claims to complete
+  const results = await Promise.all(claimPromises);
+  
+  // Count successes and failures
+  successCount = results.filter(r => r.success).length;
+  failureCount = results.filter(r => !r.success).length;
   
   console.log(`\n🎉 Claim process completed!`);
   console.log(`✅ Success: ${successCount}`);
   console.log(`❌ Failures: ${failureCount}`);
+  console.log(`💾 All results saved to MongoDB`);
 }
 
 // Function to run the claimer with scheduling
 function startScheduler() {
   console.log('🕐 Starting 8ball pool reward scheduler...');
-  console.log('📅 Scheduled runs:');
-  console.log('   - 12:00 PM (noon) every day');
-  console.log('   - 12:00 AM (midnight) every day');
+  console.log('📅 Scheduled runs (every 6 hours):');
+  console.log('   - 00:00 (12:00 AM midnight) UTC');
+  console.log('   - 06:00 (6:00 AM) UTC');
+  console.log('   - 12:00 (12:00 PM noon) UTC');
+  console.log('   - 18:00 (6:00 PM) UTC');
   console.log('⏰ Scheduler started. Press Ctrl+C to stop.');
   
-  // Schedule at 12:00 PM (noon) every day
-  cron.schedule('0 12 * * *', () => {
-    console.log('\n🕐 12:00 PM - Running scheduled claim...');
+  // Schedule at 00:00 (midnight) UTC
+  cron.schedule('0 0 * * *', () => {
+    console.log('\n🕐 00:00 UTC - Running scheduled claim...');
     claimRewards().catch(console.error);
   });
   
-  // Schedule at 12:00 AM (midnight) every day  
-  cron.schedule('0 0 * * *', () => {
-    console.log('\n🕐 12:00 AM - Running scheduled claim...');
+  // Schedule at 06:00 (6 AM) UTC
+  cron.schedule('0 6 * * *', () => {
+    console.log('\n🕐 06:00 UTC - Running scheduled claim...');
+    claimRewards().catch(console.error);
+  });
+  
+  // Schedule at 12:00 (noon) UTC
+  cron.schedule('0 12 * * *', () => {
+    console.log('\n🕐 12:00 UTC - Running scheduled claim...');
+    claimRewards().catch(console.error);
+  });
+  
+  // Schedule at 18:00 (6 PM) UTC
+  cron.schedule('0 18 * * *', () => {
+    console.log('\n🕐 18:00 UTC - Running scheduled claim...');
     claimRewards().catch(console.error);
   });
   

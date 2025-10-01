@@ -1,0 +1,201 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  body {
+    @apply bg-background-primary text-text-primary font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  /* Dark mode styles */
+  .dark body {
+    @apply bg-background-dark-primary text-text-dark-primary;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  
+  .btn-primary {
+    @apply btn bg-primary-500 text-white hover:bg-primary-600 focus:ring-primary-500;
+  }
+  
+          .dark .btn-primary {
+            @apply bg-dark-accent-navy text-white hover:bg-dark-accent-blue focus:ring-dark-accent-navy shadow-lg shadow-dark-accent-navy/25;
+          }
+  
+  .btn-secondary {
+    @apply btn bg-secondary-500 text-white hover:bg-secondary-600 focus:ring-secondary-500;
+  }
+  
+  .btn-outline {
+    @apply btn border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-primary-500;
+  }
+  
+          .dark .btn-outline {
+            @apply border-dark-accent-ocean bg-background-dark-tertiary text-text-dark-primary hover:bg-background-dark-quaternary hover:border-dark-accent-navy focus:ring-dark-accent-ocean shadow-lg shadow-dark-accent-ocean/10;
+          }
+  
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6;
+  }
+  
+          .dark .card {
+            @apply bg-background-dark-secondary border-background-dark-quaternary shadow-xl shadow-dark-accent-navy/10;
+          }
+  
+  .input {
+    @apply block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-gray-50 disabled:text-gray-500;
+  }
+  
+          .dark .input {
+            @apply bg-background-dark-tertiary border-background-dark-quaternary text-text-dark-primary placeholder-text-dark-muted focus:border-dark-accent-navy focus:ring-dark-accent-navy disabled:bg-background-dark-quaternary disabled:text-text-dark-muted shadow-lg shadow-dark-accent-ocean/5;
+          }
+  
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-2;
+  }
+  
+  .dark .label {
+    @apply text-text-dark-secondary;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .bg-gradient-subtle {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  }
+  
+  .bg-gradient-accent {
+    background: linear-gradient(135deg, #f2760a 0%, #facc15 100%);
+  }
+  
+          .dark .bg-gradient-accent {
+            background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 50%, #06B6D4 100%);
+          }
+  
+  .backdrop-blur-subtle {
+    backdrop-filter: blur(8px);
+  }
+
+  /* Radial gradient utility */
+  .bg-gradient-radial {
+    background: radial-gradient(circle, var(--tw-gradient-stops));
+  }
+}
+
+/* Particle animation styles */
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.particle-1 {
+  width: 5px;
+  height: 5px;
+  background: rgba(242, 118, 10, 0.3);
+  box-shadow: 0 0 10px rgba(242, 118, 10, 0.5);
+  animation: float 8s ease-in-out infinite;
+}
+
+.dark .particle-1 {
+  background: rgba(30, 64, 175, 0.5);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+}
+
+.particle-2 {
+  width: 7px;
+  height: 7px;
+  background: rgba(250, 204, 21, 0.2);
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.4);
+  animation: float 10s ease-in-out infinite 1s;
+}
+
+.dark .particle-2 {
+  background: rgba(6, 182, 212, 0.4);
+  box-shadow: 0 0 18px rgba(6, 182, 212, 0.5);
+}
+
+.particle-3 {
+  width: 4px;
+  height: 4px;
+  background: rgba(139, 92, 246, 0.25);
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
+  animation: float 12s ease-in-out infinite 2s;
+}
+
+.dark .particle-3 {
+  background: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.6);
+}
+
+/* Orb animation styles - Enhanced for dark mode */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3), transparent);
+  pointer-events: none;
+  filter: blur(40px);
+  opacity: 0.6;
+}
+
+.orb-1 {
+  background: radial-gradient(circle at 30% 30%, rgba(242, 118, 10, 0.15), transparent);
+  animation: float 15s ease-in-out infinite;
+}
+
+.dark .orb-1 {
+  background: radial-gradient(circle at 30% 30%, rgba(30, 64, 175, 0.25), rgba(59, 130, 246, 0.15), transparent);
+  filter: blur(60px);
+  opacity: 0.8;
+}
+
+.orb-2 {
+  background: radial-gradient(circle at 30% 30%, rgba(250, 204, 21, 0.12), transparent);
+  animation: float 18s ease-in-out infinite 3s;
+}
+
+.dark .orb-2 {
+  background: radial-gradient(circle at 30% 30%, rgba(14, 165, 233, 0.3), rgba(6, 182, 212, 0.2), transparent);
+  filter: blur(70px);
+  opacity: 0.75;
+}
+
+.orb-3 {
+  background: radial-gradient(circle at 30% 30%, rgba(139, 92, 246, 0.1), transparent);
+  animation: float 20s ease-in-out infinite 6s;
+}
+
+.dark .orb-3 {
+  background: radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.2), rgba(59, 130, 246, 0.15), transparent);
+  filter: blur(50px);
+  opacity: 0.7;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .particle,
+  .orb,
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+

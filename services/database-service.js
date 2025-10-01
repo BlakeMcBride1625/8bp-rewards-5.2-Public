@@ -1,10 +1,11 @@
 const mongoose = require('mongoose');
-const UserMapping = require('../models/UserMapping');
+const Registration = require('../models/Registration');
 
 class DatabaseService {
   constructor() {
     this.isConnected = false;
-    this.connectionString = process.env.MONGODB_URI || 'mongodb://localhost:27017/8bp-rewards';
+    // Use MONGO_URI to match the .env file (same as backend)
+    this.connectionString = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/8bp-rewards';
   }
 
   async connect() {
@@ -50,62 +51,53 @@ class DatabaseService {
   async disconnect() {
     try {
       if (this.isConnected) {
-        await mongoose.disconnect();
+        await mongoose.connection.close();
         this.isConnected = false;
-        console.log('🔒 Disconnected from MongoDB');
+        console.log('🔌 Disconnected from MongoDB');
       }
     } catch (error) {
       console.error('❌ Error disconnecting from MongoDB:', error.message);
     }
   }
 
-  // Add or update a user mapping (override existing if same Discord ID or 8BP ID)
-  async addOrUpdateUser(discordId, bpAccountId, username) {
+  // Add or update a registration (using eightBallPoolId + username)
+  async addOrUpdateUser(eightBallPoolId, username) {
     try {
       await this.ensureConnection();
 
-      // Check for existing Discord user
-      const existingDiscordUser = await UserMapping.findByDiscordId(discordId);
-      
-      // Check for existing 8BP account
-      const existingBpAccount = await UserMapping.findByBpAccountId(bpAccountId);
+      // Check for existing registration
+      const existing = await Registration.findByEightBallPoolId(eightBallPoolId);
 
-      let overrideMessage = '';
+      if (existing) {
+        // Update existing registration
+        existing.username = username;
+        existing.updatedAt = new Date();
+        await existing.save();
+        console.log(`🔄 Updated registration: ${username} (${eightBallPoolId})`);
+        return {
+          success: true,
+          user: existing,
+          isNew: false
+        };
+      } else {
+        // Create new registration
+        const registration = new Registration({
+          eightBallPoolId,
+          username
+        });
 
-      // Remove existing Discord user if different
-      if (existingDiscordUser && existingDiscordUser.bpAccountId !== bpAccountId) {
-        await UserMapping.findByIdAndDelete(existingDiscordUser._id);
-        overrideMessage = `🔄 **Replaced your previous account** (${existingDiscordUser.bpAccountId})`;
+        await registration.save();
+        console.log(`✅ New registration saved: ${username} (${eightBallPoolId})`);
+
+        return {
+          success: true,
+          user: registration,
+          isNew: true
+        };
       }
-
-      // Remove existing 8BP account if different Discord user
-      if (existingBpAccount && existingBpAccount.discordId !== discordId) {
-        await UserMapping.findByIdAndDelete(existingBpAccount._id);
-        if (overrideMessage) {
-          overrideMessage += `\n🔄 **Overrode existing 8BP ID (${bpAccountId})** previously registered by ${existingBpAccount.username}`;
-        } else {
-          overrideMessage = `🔄 **Overrode existing 8BP ID (${bpAccountId})** previously registered by ${existingBpAccount.username}`;
-        }
-      }
-
-      // Create new user mapping
-      const userMapping = new UserMapping({
-        discordId,
-        bpAccountId,
-        username
-      });
-
-      await userMapping.save();
-      console.log(`✅ User mapping saved: ${username} (${bpAccountId}) -> ${discordId}`);
-
-      return {
-        success: true,
-        user: userMapping,
-        overrideMessage
-      };
 
     } catch (error) {
-      console.error('❌ Error adding/updating user:', error.message);
+      console.error('❌ Error adding/updating registration:', error.message);
       return {
         success: false,
         error: error.message
@@ -113,101 +105,69 @@ class DatabaseService {
     }
   }
 
-  // Get all user mappings
+  // Get all registrations
   async getAllUsers() {
     try {
       await this.ensureConnection();
-      const users = await UserMapping.getAllUsers();
-      console.log(`📋 Retrieved ${users.length} user mappings from database`);
+      const users = await Registration.getAllRegistrations();
+      console.log(`📋 Retrieved ${users.length} registrations from database`);
       return users;
     } catch (error) {
-      console.error('❌ Error getting all users:', error.message);
+      console.error('❌ Error getting all registrations:', error.message);
       return [];
     }
   }
 
-  // Get user by Discord ID
-  async getUserByDiscordId(discordId) {
+  // Get registration by 8 Ball Pool ID
+  async getUserByEightBallPoolId(eightBallPoolId) {
     try {
       await this.ensureConnection();
-      return await UserMapping.findByDiscordId(discordId);
+      return await Registration.findByEightBallPoolId(eightBallPoolId);
     } catch (error) {
-      console.error('❌ Error getting user by Discord ID:', error.message);
+      console.error('❌ Error getting registration by 8BP ID:', error.message);
       return null;
     }
   }
 
-  // Get user by 8BP Account ID
-  async getUserByBpAccountId(bpAccountId) {
+  // Remove registration by 8 Ball Pool ID
+  async removeUserByEightBallPoolId(eightBallPoolId) {
     try {
       await this.ensureConnection();
-      return await UserMapping.findByBpAccountId(bpAccountId);
-    } catch (error) {
-      console.error('❌ Error getting user by 8BP Account ID:', error.message);
-      return null;
-    }
-  }
-
-  // Remove user by Discord ID
-  async removeUserByDiscordId(discordId) {
-    try {
-      await this.ensureConnection();
-      const result = await UserMapping.findOneAndDelete({ discordId });
+      const result = await Registration.findOneAndDelete({ eightBallPoolId });
       if (result) {
-        console.log(`🗑️ Removed user mapping: ${result.username} (${result.bpAccountId})`);
+        console.log(`🗑️ Removed registration: ${result.username} (${result.eightBallPoolId})`);
         return { success: true, user: result };
       } else {
-        return { success: false, error: 'User not found' };
+        return { success: false, error: 'Registration not found' };
       }
     } catch (error) {
-      console.error('❌ Error removing user:', error.message);
+      console.error('❌ Error removing registration:', error.message);
       return { success: false, error: error.message };
     }
   }
 
-  // Remove user by 8BP Account ID
-  async removeUserByBpAccountId(bpAccountId) {
-    try {
-      await this.ensureConnection();
-      const result = await UserMapping.findOneAndDelete({ bpAccountId });
-      if (result) {
-        console.log(`🗑️ Removed user mapping: ${result.username} (${result.bpAccountId})`);
-        return { success: true, user: result };
-      } else {
-        return { success: false, error: 'User not found' };
-      }
-    } catch (error) {
-      console.error('❌ Error removing user:', error.message);
-      return { success: false, error: error.message };
-    }
-  }
-
-  // Update claim statistics for a user
-  async updateClaimStats(discordId) {
-    try {
-      await this.ensureConnection();
-      const user = await UserMapping.findByDiscordId(discordId);
-      if (user) {
-        await user.updateClaimStats();
-        console.log(`📊 Updated claim stats for ${user.username}: ${user.totalClaims} total claims`);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('❌ Error updating claim stats:', error.message);
-      return false;
-    }
-  }
-
-  // Get user count
+  // Get registration count
   async getUserCount() {
     try {
       await this.ensureConnection();
-      const count = await UserMapping.countDocuments();
+      const count = await Registration.getRegistrationCount();
       return count;
     } catch (error) {
-      console.error('❌ Error getting user count:', error.message);
+      console.error('❌ Error getting registration count:', error.message);
       return 0;
+    }
+  }
+
+  // Clear all registrations
+  async clearAllUsers() {
+    try {
+      await this.ensureConnection();
+      const result = await Registration.deleteMany({});
+      console.log(`🗑️ Cleared all registrations (${result.deletedCount} deleted)`);
+      return { success: true, count: result.deletedCount };
+    } catch (error) {
+      console.error('❌ Error clearing registrations:', error.message);
+      return { success: false, error: error.message };
     }
   }
 
@@ -221,12 +181,10 @@ class DatabaseService {
         timestamp: new Date().toISOString(),
         totalUsers: users.length,
         users: users.map(user => ({
-          discordId: user.discordId,
-          bpAccountId: user.bpAccountId,
+          eightBallPoolId: user.eightBallPoolId,
           username: user.username,
           createdAt: user.createdAt,
-          lastClaimed: user.lastClaimed,
-          totalClaims: user.totalClaims
+          updatedAt: user.updatedAt
         }))
       };
 

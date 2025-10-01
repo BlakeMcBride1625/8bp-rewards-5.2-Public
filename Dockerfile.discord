@@ -1,0 +1,47 @@
+# Discord Bot Dockerfile
+FROM node:18-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+# Set Puppeteer to use installed Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy Discord bot files
+COPY discord-bot.js ./
+COPY discord-service.js ./
+COPY playwright-claimer-discord.js ./
+COPY playwright-claimer.js ./
+COPY image-generator.js ./
+COPY models/ ./models/
+COPY services/ ./services/
+COPY user-mapping.json ./
+
+# Create logs directory
+RUN mkdir -p logs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD node -e "console.log('Discord bot health check')" || exit 1
+
+# Start the Discord bot
+CMD ["node", "discord-bot.js"]
+
+

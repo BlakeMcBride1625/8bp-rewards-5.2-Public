@@ -1,0 +1,50 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "outDir": "./dist/backend",
+    "rootDir": "./backend/src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "moduleResolution": "node",
+    "baseUrl": "./",
+    "paths": {
+      "@/*": ["backend/src/*"],
+      "@models/*": ["backend/src/models/*"],
+      "@services/*": ["backend/src/services/*"],
+      "@controllers/*": ["backend/src/controllers/*"],
+      "@middleware/*": ["backend/src/middleware/*"],
+      "@routes/*": ["backend/src/routes/*"],
+      "@utils/*": ["backend/src/utils/*"],
+      "@types/*": ["backend/src/types/*"]
+    },
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": [
+    "backend/src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "frontend",
+    "src",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}
+

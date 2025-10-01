@@ -144,10 +144,11 @@ class DiscordService {
       async execute(interaction, service) {
         const eightBallPoolId = interaction.options.getInteger('eightballpoolid').toString();
         const username = interaction.options.getString('username');
+        const discordId = interaction.user.id;
 
         try {
-          // Use database service to add/update user (no Discord ID needed)
-          const result = await service.dbService.addOrUpdateUser(eightBallPoolId, username);
+          // Use database service to add/update user
+          const result = await service.dbService.addOrUpdateUser(discordId, eightBallPoolId, username);
           
           if (!result.success) {
             return interaction.reply({
@@ -159,32 +160,14 @@ class DiscordService {
           // Get total user count
           const totalUsers = await service.dbService.getUserCount();
 
-          // Trigger first-time claim for new registrations
-          if (result.isNew) {
-            const { exec } = require('child_process');
-            const path = require('path');
-            const projectRoot = path.join(__dirname);
-            const claimScript = path.join(projectRoot, 'first-time-claim.js');
-            
-            console.log(`🎁 Triggering first-time claim for ${username} (${eightBallPoolId})`);
-            
-            exec(`cd ${projectRoot} && node ${claimScript} ${eightBallPoolId} "${username}"`, (error, stdout, stderr) => {
-              if (error) {
-                console.error(`❌ First-time claim failed for ${username}:`, error.message);
-              } else {
-                console.log(`✅ First-time claim completed for ${username}`);
-                console.log(stdout);
-              }
-            });
-          }
-
           const embed = new EmbedBuilder()
-            .setTitle(result.isNew ? '✅ Account Registered' : '✅ Account Updated')
-            .setDescription(`Successfully ${result.isNew ? 'registered' : 'updated'} your 8 Ball Pool account!${result.isNew ? '\n\n🎁 **First claim triggered!** Your rewards are being claimed now...' : ''}`)
+            .setTitle('✅ Account Registered')
+            .setDescription(`Successfully registered your 8 Ball Pool account!${result.overrideMessage ? '\n\n' + result.overrideMessage : ''}`)
             .addFields(
               { name: '🎱 8BP Account ID', value: eightBallPoolId, inline: true },
               { name: '👤 Username', value: username, inline: true },
-              { name: '📋 Total Registrations', value: `${totalUsers}`, inline: true }
+              { name: '🆔 Discord ID', value: discordId, inline: true },
+              { name: '📋 Total Accounts', value: `${totalUsers}`, inline: true }
             )
             .setColor(0x00FF00)
             .setTimestamp();
@@ -219,14 +202,14 @@ class DiscordService {
 
           const embed = new EmbedBuilder()
             .setTitle('📋 Registered Accounts')
-            .setDescription(`Total registrations: **${users.length}**`)
+            .setDescription(`Total accounts: **${users.length}**`)
             .setColor(0x0099FF)
             .setTimestamp();
 
           users.forEach((user, index) => {
             embed.addFields({
               name: `${index + 1}. ${user.username}`,
-              value: `🎱 **8BP ID:** ${user.eightBallPoolId}\n📅 **Registered:** ${new Date(user.createdAt).toLocaleDateString()}`,
+              value: `🎱 **ID:** ${user.bpAccountId}\n🆔 **Discord:** <@${user.discordId}>\n📊 **Claims:** ${user.totalClaims || 0}`,
               inline: true
             });
           });
@@ -273,8 +256,8 @@ class DiscordService {
               ? new Date(user.lastClaimed).toLocaleDateString()
               : 'Never';
             
-            statusText += `${index + 1}. **${user.username}** (${user.eightBallPoolId})\n`;
-            statusText += `   📅 Registered: ${new Date(user.createdAt).toLocaleDateString()}\n\n`;
+            statusText += `${index + 1}. **${user.username}** (${user.bpAccountId})\n`;
+            statusText += `   📊 Claims: ${user.totalClaims || 0} | Last: ${lastClaimed}\n\n`;
           });
 
           embed.setDescription(statusText);
@@ -302,23 +285,34 @@ class DiscordService {
             .setRequired(true)),
       async execute(interaction, service) {
         const eightBallPoolId = interaction.options.getInteger('eightballpoolid').toString();
+        const discordId = interaction.user.id;
 
         try {
-          // Remove the registration by 8BP ID
-          const result = await service.dbService.removeUserByEightBallPoolId(eightBallPoolId);
+          // Check if user owns this account
+          const user = await service.dbService.getUserByDiscordId(discordId);
+          
+          if (!user || user.bpAccountId !== eightBallPoolId) {
+            return interaction.reply({
+              content: '❌ Account not found! Make sure you\'re using your correct 8BP ID.',
+              ephemeral: interaction.inGuild()
+            });
+          }
+
+          // Remove the user
+          const result = await service.dbService.removeUserByDiscordId(discordId);
           
           if (!result.success) {
             return interaction.reply({
-              content: `❌ Failed to remove registration: ${result.error || 'Registration not found'}`,
+              content: `❌ Failed to remove account: ${result.error}`,
               ephemeral: interaction.inGuild()
             });
           }
 
           const embed = new EmbedBuilder()
-            .setTitle('🗑️ Registration Removed')
-            .setDescription(`Successfully removed the registration`)
+            .setTitle('🗑️ Account Removed')
+            .setDescription(`Successfully removed your 8 Ball Pool account`)
             .addFields(
-              { name: '🎱 8BP Account ID', value: result.user.eightBallPoolId, inline: true },
+              { name: '🎱 8BP Account ID', value: result.user.bpAccountId, inline: true },
               { name: '👤 Username', value: result.user.username, inline: true }
             )
             .setColor(0xFF0000)
@@ -329,7 +323,7 @@ class DiscordService {
         } catch (error) {
           console.error('❌ Error in /deregister command:', error);
           await interaction.reply({
-            content: '❌ An error occurred while removing the registration. Please try again.',
+            content: '❌ An error occurred while removing your account. Please try again.',
             ephemeral: interaction.inGuild()
           });
         }
@@ -688,3 +682,5 @@ class DiscordService {
 }
 
 module.exports = DiscordService;
+
+

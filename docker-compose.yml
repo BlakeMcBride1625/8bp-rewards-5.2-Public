@@ -24,30 +24,105 @@ services:
       retries: 3
       start_period: 40s
 
-  # 8BP Rewards Application
-  app:
-    build: .
-    container_name: 8bp-rewards-app
+  # 8BP Rewards Backend API
+  backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: 8bp-rewards-backend
     restart: unless-stopped
     depends_on:
       mongodb:
         condition: service_healthy
     environment:
       # MongoDB Configuration
-      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE:-8bp_rewards}?authSource=admin
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE:-8bp_rewards}?authSource=admin
       
-      # 8Ball Pool Configuration
+      # Discord Bot Configuration
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+      OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI}
+      ALLOWED_ADMINS: ${ALLOWED_ADMINS}
+      SCHEDULER_CHANNEL_ID: ${SCHEDULER_CHANNEL_ID}
+      REWARDS_CHANNEL_ID: ${REWARDS_CHANNEL_ID}
+      
+      # Server Configuration
+      BACKEND_PORT: ${BACKEND_PORT:-2600}
+      FRONTEND_PORT: ${FRONTEND_PORT:-2500}
+      NODE_ENV: production
+      
+      # Public URLs
+      PUBLIC_URL: ${PUBLIC_URL}
+      HOME_URL: ${HOME_URL}
+      REGISTER_URL: ${REGISTER_URL}
+      ADMIN_DASHBOARD_URL: ${ADMIN_DASHBOARD_URL}
+      CONTACT_URL: ${CONTACT_URL}
+      SYSTEM_STATUS_URL: ${SYSTEM_STATUS_URL}
+      LEADERBOARD_URL: ${LEADERBOARD_URL}
+      
+      # SMTP Configuration
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_SECURE: ${SMTP_SECURE}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_TO: ${MAIL_TO}
+      
+      # Legacy Configuration (for backward compatibility)
       USER_IDS: ${USER_IDS}
       SHOP_URL: ${SHOP_URL:-https://8ballpool.com/en/shop}
       HEADLESS: ${HEADLESS:-true}
       TIMEOUT: ${TIMEOUT:-60000}
       DELAY_BETWEEN_USERS: ${DELAY_BETWEEN_USERS:-10000}
       
+      # Timezone
+      TZ: ${TZ:-Europe/London}
+    ports:
+      - "${BACKEND_PORT:-2600}:${BACKEND_PORT:-2600}"
+    volumes:
+      - ./logs:/app/logs
+      - ./user-mapping.json:/app/user-mapping.json
+    networks:
+      - 8bp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT:-2600}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Discord Bot Service
+  discord-bot:
+    build: 
+      context: .
+      dockerfile: Dockerfile.discord
+    container_name: 8bp-rewards-discord
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    environment:
+      # MongoDB Configuration
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE:-8bp_rewards}?authSource=admin
+      
       # Discord Bot Configuration
       DISCORD_TOKEN: ${DISCORD_TOKEN}
-      DISCORD_CHANNEL_ID: ${DISCORD_CHANNEL_ID}
-      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
-      DISCORD_SPECIAL_USERS: ${DISCORD_SPECIAL_USERS}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET}
+      ALLOWED_ADMINS: ${ALLOWED_ADMINS}
+      SCHEDULER_CHANNEL_ID: ${SCHEDULER_CHANNEL_ID}
+      REWARDS_CHANNEL_ID: ${REWARDS_CHANNEL_ID}
+      
+      # Legacy Configuration
+      USER_IDS: ${USER_IDS}
+      SHOP_URL: ${SHOP_URL:-https://8ballpool.com/en/shop}
+      HEADLESS: ${HEADLESS:-true}
+      TIMEOUT: ${TIMEOUT:-60000}
+      DELAY_BETWEEN_USERS: ${DELAY_BETWEEN_USERS:-10000}
       
       # Timezone
       TZ: ${TZ:-Europe/London}
@@ -57,7 +132,7 @@ services:
     networks:
       - 8bp-network
     healthcheck:
-      test: ["CMD", "node", "-e", "console.log('App health check')"]
+      test: ["CMD", "node", "-e", "console.log('Discord bot health check')"]
       interval: 30s
       timeout: 10s
       retries: 3
