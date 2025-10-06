@@ -1,0 +1,33 @@
+
+> 8bp-rewards@2.0.0 start:backend
+> node dist/backend/server.js
+
+[32minfo[39m: Connecting to MongoDB... {"service":"8bp-rewards","timestamp":"2025-10-06T05:30:19.663Z"}
+[32minfo[39m: 🔗 Connecting to MongoDB... {"service":"8bp-rewards","timestamp":"2025-10-06T05:30:19.666Z"}
+MongoDB transport not available, using console logging
+[32minfo[39m: ✅ Connected to MongoDB successfully {"service":"8bp-rewards","timestamp":"2025-10-06T05:30:19.984Z"}
+[32minfo[39m: Scheduler initialized {"action":"scheduler_init","nextRun":"2025-10-06T06:00:00.000Z","schedule":"00:00, 06:00, 12:00, 18:00 UTC","service":"8bp-rewards","timestamp":"2025-10-06T05:30:20.029Z"}
+[32minfo[39m: ⏰ Scheduler service initialized {"service":"8bp-rewards","timestamp":"2025-10-06T05:30:20.030Z"}
+[32minfo[39m: 📅 Next scheduled run: 2025-10-06T06:00:00.000Z {"service":"8bp-rewards","timestamp":"2025-10-06T05:30:20.031Z"}
+node:events:497
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::2600
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at Function.listen (/home/blake/8bp-rewards/node_modules/express/lib/application.js:635:24)
+    at Server.start (/home/blake/8bp-rewards/dist/backend/server.js:176:22)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1976:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '::',
+  port: 2600
+}
+
+Node.js v22.19.0

@@ -1,0 +1,10 @@
+
+> 8bp-rewards@2.0.0 start:frontend
+> cd frontend && npm start
+
+
+> 8bp-rewards-frontend@1.0.0 start
+> PORT=2500 react-scripts start
+
+Invalid options object. Dev Server has been initialized using an options object that does not match the API schema.
+ - options.allowedHosts[0] should be a non-empty string.

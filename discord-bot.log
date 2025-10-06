@@ -1,0 +1,24 @@
+🚀 Starting Discord Bot...
+📊 Connecting to database...
+🔗 Connecting to MongoDB...
+✅ Connected to MongoDB successfully
+🤖 Discord bot is ready!
+📋 Logged in as: 8 Ball Pool/Rewards#6954
+👁️ Bot status set to DND - Watching https://8bp.epildevconnect.uk/8bp-rewards/home
+(node:907615) DeprecationWarning: The ready event has been renamed to clientReady to distinguish it from the gateway READY event and will only emit under that name in v15. Please use clientReady instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+✅ Discord Bot is now running!
+💡 Use slash commands in your Discord server
+📋 Available commands:
+   /register - Register an 8BP account
+   /list-accounts - List all registered accounts
+   /check-accounts - Check account status
+   /deregister - Remove a registration
+   /clear - Delete bot messages
+   /help - Show help information
+   /md - Show documentation
+   /server-status - Check bot server status
+   /website-status - Check website status
+   /ping-discord - Test Discord connectivity
+   /ping-website - Test website connectivity
+✅ Registered 11 slash commands globally
