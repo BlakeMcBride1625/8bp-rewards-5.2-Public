@@ -578,8 +578,9 @@ export class EightBallPoolClaimer {
               // Use standardized claim validation logic
               const isValidNewClaim = await validateClaimResult(button, 'Unknown Item', this.logger);
               
-              // Only count if it wasn't already skipped for counting AND it's a valid new claim
-              if (!shouldSkipForCounting && isValidNewClaim) {
+              // Count items that were successfully claimed
+              // Only count if it's a valid new claim AND the button wasn't already in a "claimed" state
+              if (isValidNewClaim && !shouldSkipForCounting) {
                 totalClicked++;
               }
               
@@ -617,8 +618,9 @@ export class EightBallPoolClaimer {
               // Use standardized claim validation logic
               const isValidNewClaim = await validateClaimResult(button, buttonText, this.logger);
               
-              // Only count if it wasn't already skipped for counting AND it's a valid new claim
-              if (!shouldSkipForCounting && isValidNewClaim) {
+              // Count items that were successfully claimed
+              // Only count if it's a valid new claim AND the button wasn't already in a "claimed" state
+              if (isValidNewClaim && !shouldSkipForCounting) {
                 totalClicked++;
               }
               

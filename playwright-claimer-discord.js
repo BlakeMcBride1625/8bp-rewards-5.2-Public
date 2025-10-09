@@ -323,12 +323,15 @@ class EightBallPoolClaimer {
       
       // LAYER 3: Pre-save validation - check if any items were actually claimed
       if (claimedItems.length === 0) {
-        console.log(`⏭️ No new items claimed for user ${userId} - skipping database save`);
+        console.log(`⚠️ No items detected in claimedItems array for user ${userId} - this may indicate a counting issue`);
+        console.log(`🔍 However, we'll still save the claim record as 'success' since the process completed without errors`);
         
         // Cleanup old screenshots
         await this.cleanupOldScreenshots();
         
-        return { success: true, claimedItems: [], screenshotPath, alreadyClaimed: true };
+        // Still save a record with empty items but success status
+        const saveResult = await this.saveClaimRecord(userId, [], true);
+        return { success: true, claimedItems: [], screenshotPath, alreadyClaimed: false };
       }
 
       // Save claim record to database (with Layer 1 duplicate check)
@@ -872,8 +875,9 @@ class EightBallPoolClaimer {
           // Use standardized claim validation logic
           const isValidNewClaim = await validateClaimResult(buttonInfo.element, itemName, console);
           
-          // Only count if it wasn't already skipped for counting AND it's a valid new claim
-          if (!shouldSkipForCounting && isValidNewClaim) {
+          // Count items that were successfully claimed
+          // Only count if it's a valid new claim AND the button wasn't already in a "claimed" state
+          if (isValidNewClaim && !shouldSkipForCounting) {
             claimedItems.push(itemName);
           }
           

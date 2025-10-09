@@ -51,10 +51,16 @@ async function validateClaimResult(button, itemName, logger) {
       return true;
     }
     
-    // For 8BP website, assume success if button didn't throw error
-    // (Their site doesn't always disable buttons properly)
-    logFn.call(logger, `✅ Assuming successful claim for 8BP website: ${itemName} (button text: "${currentText}", disabled: ${isDisabled})`);
-    return true;
+    // For 8BP website, be more careful with success detection
+    // Only consider it successful if the button state actually changed or became disabled
+    // This prevents inflating leaderboard scores with false positives
+    if (currentText !== originalText || isDisabled) {
+      logFn.call(logger, `✅ Successful claim for 8BP website: ${itemName} (button text: "${currentText}", disabled: ${isDisabled})`);
+      return true;
+    } else {
+      logFn.call(logger, `⚠️ Button click may not have been successful for: ${itemName} (no state change detected)`);
+      return false;
+    }
     
   } catch (error) {
     const logFn = logger.log || logger.warn || console.log;
