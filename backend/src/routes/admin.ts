@@ -846,6 +846,16 @@ function isAllowedForTelegram(discordUserId: string): boolean {
   return allowedVpsAdmins.includes(discordUserId);
 }
 
+// Check if user's email is allowed for email authentication
+function isAllowedForEmail(userEmail: string): boolean {
+  if (!userEmail) return false;
+  
+  const allowedEmails = process.env.ADMIN_EMAILS?.split(',').map(email => email.trim().toLowerCase()) || [];
+  if (allowedEmails.length === 0) return false; // No emails configured
+  
+  return allowedEmails.includes(userEmail.toLowerCase());
+}
+
 // Request VPS access codes (Discord or Telegram)
 router.post('/vps/request-access', async (req, res) => {
   try {
@@ -986,39 +996,55 @@ router.post('/vps/request-access', async (req, res) => {
 
     // Send Email code if requested
     if ((!channel || channel === 'email') && vpsCode.userEmail) {
-      try {
-        const emailService = new EmailNotificationService();
-        
-        if (emailService.isConfigured()) {
-          emailSent = await emailService.sendPinCode(
-            vpsCode.userEmail,
-            vpsCode.emailCode,
-            'VPS Monitor Access'
-          );
-          
-          if (emailSent) {
-            logger.info('VPS access email code sent', {
-              action: 'vps_email_sent',
-              userId,
-              username,
-              email: vpsCode.userEmail
-            });
-          }
-        } else {
-          logger.warn('Email service not configured', {
-            action: 'email_not_configured',
-            userId,
-            username
-          });
-        }
-      } catch (emailError) {
-        console.error('Failed to send email:', emailError);
-        logger.warn('Email sending failed', {
-          action: 'email_error',
+      // Check if user's email is in the allowed list
+      if (!isAllowedForEmail(vpsCode.userEmail)) {
+        logger.warn('Email not in ADMIN_EMAILS whitelist', {
+          action: 'email_not_whitelisted',
           userId,
           username,
-          error: emailError instanceof Error ? emailError.message : 'Unknown error'
+          email: vpsCode.userEmail
         });
+        
+        if (channel === 'email') {
+          return res.status(403).json({
+            error: 'Your email is not authorized for email authentication. Please contact an administrator or use Discord/Telegram authentication.'
+          });
+        }
+      } else {
+        try {
+          const emailService = new EmailNotificationService();
+          
+          if (emailService.isConfigured()) {
+            emailSent = await emailService.sendPinCode(
+              vpsCode.userEmail,
+              vpsCode.emailCode,
+              'VPS Monitor Access'
+            );
+            
+            if (emailSent) {
+              logger.info('VPS access email code sent', {
+                action: 'vps_email_sent',
+                userId,
+                username,
+                email: vpsCode.userEmail
+              });
+            }
+          } else {
+            logger.warn('Email service not configured', {
+              action: 'email_not_configured',
+              userId,
+              username
+            });
+          }
+        } catch (emailError) {
+          console.error('Failed to send email:', emailError);
+          logger.warn('Email sending failed', {
+            action: 'email_error',
+            userId,
+            username,
+            error: emailError instanceof Error ? emailError.message : 'Unknown error'
+          });
+        }
       }
     }
 
@@ -1481,6 +1507,60 @@ router.post('/reset-leaderboard/request-access', async (req, res) => {
       });
     }
 
+    // Send Email code if requested
+    if ((!channel || channel === 'email') && resetCode.userEmail) {
+      // Check if user's email is in the allowed list
+      if (!isAllowedForEmail(resetCode.userEmail)) {
+        logger.warn('Email not in ADMIN_EMAILS whitelist for leaderboard reset', {
+          action: 'email_not_whitelisted',
+          userId,
+          username,
+          email: resetCode.userEmail
+        });
+        
+        if (channel === 'email') {
+          return res.status(403).json({
+            error: 'Your email is not authorized for email authentication. Please contact an administrator or use Discord/Telegram authentication.'
+          });
+        }
+      } else {
+        try {
+          const emailService = new EmailNotificationService();
+          
+          if (emailService.isConfigured()) {
+            emailSent = await emailService.sendPinCode(
+              resetCode.userEmail,
+              resetCode.emailCode,
+              'Leaderboard Reset Access'
+            );
+            
+            if (emailSent) {
+              logger.info('Leaderboard reset email code sent', {
+                action: 'reset_leaderboard_email_sent',
+                userId,
+                username,
+                email: resetCode.userEmail
+              });
+            }
+          } else {
+            logger.warn('Email service not configured', {
+              action: 'email_not_configured',
+              userId,
+              username
+            });
+          }
+        } catch (emailError) {
+          console.error('Failed to send email:', emailError);
+          logger.warn('Email sending failed', {
+            action: 'email_error',
+            userId,
+            username,
+            error: emailError instanceof Error ? emailError.message : 'Unknown error'
+          });
+        }
+      }
+    }
+
     // Check if the requested channel succeeded
     if (channel === 'discord' && !discordSent) {
       return res.status(500).json({
@@ -1493,20 +1573,30 @@ router.post('/reset-leaderboard/request-access', async (req, res) => {
         error: 'Failed to send Telegram access code. Please try again.'
       });
     }
+    
+    if (channel === 'email' && !emailSent) {
+      return res.status(500).json({
+        error: 'Failed to send email access code. Please check your email configuration.'
+      });
+    }
 
     logger.logAdminAction(userId, 'reset_leaderboard_access_requested', {
       username,
-      channel: channel || 'both',
+      channel: channel || 'all',
       discordCodeGenerated: discordSent,
-      telegramCodeGenerated: telegramSent
+      telegramCodeGenerated: telegramSent,
+      emailCodeGenerated: emailSent
     });
 
     return res.json({
       message: channel === 'discord' ? 'Discord access code sent!' : 
                channel === 'telegram' ? 'Telegram access code sent!' : 
-               `Access codes sent to: ${discordSent ? 'Discord' : ''}${discordSent && telegramSent ? ' and ' : ''}${telegramSent ? 'Telegram' : ''}`,
+               channel === 'email' ? 'Email access code sent!' :
+               `Access codes sent to: ${[discordSent && 'Discord', telegramSent && 'Telegram', emailSent && 'Email'].filter(Boolean).join(', ')}`,
       discordSent,
       telegramSent,
+      emailSent,
+      userEmail: resetCode.userEmail || null,
       expiresIn: 5 * 60 * 1000 // 5 minutes in milliseconds
     });
 

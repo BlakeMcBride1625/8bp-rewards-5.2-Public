@@ -11,6 +11,10 @@ SCHEDULER_CHANNEL_ID=your_scheduler_channel_id_here
 REWARDS_CHANNEL_ID=your_rewards_channel_id_here
 REGISTRATION_CHANNEL_ID=1422725910196518922
 
+# Admin Email Whitelist (for email authentication)
+# Comma-separated list of emails allowed to receive authentication codes
+ADMIN_EMAILS=admin@example.com,admin2@example.com
+
 # Telegram Bot Configuration
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 ALLOWED_TELEGRAM_USERS=your_telegram_user_id_here,your_friend_telegram_user_id_here
