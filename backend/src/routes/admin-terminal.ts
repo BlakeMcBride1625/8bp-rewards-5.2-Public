@@ -363,7 +363,7 @@ router.post('/request-codes', async (req, res) => {
     let emailSent = false;
     
     // Send Discord code - only to the logged-in user
-    if (!channel || channel === 'discord') {
+    if (channel === 'discord') {
       try {
         const discordClient = initDiscordClient();
         if (discordClient && !discordClient.isReady()) {
@@ -401,7 +401,7 @@ router.post('/request-codes', async (req, res) => {
     }
     
     // Send Telegram code - only to the logged-in user
-    if (!channel || channel === 'telegram') {
+    if (channel === 'telegram') {
       try {
           // Map Discord user ID to Telegram user ID for the logged-in user only
           // Read mapping from environment variable: DISCORD_TO_TELEGRAM_MAPPING=discord_id1:telegram_id1,discord_id2:telegram_id2
