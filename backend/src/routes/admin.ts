@@ -6,15 +6,16 @@ import { logger } from '../services/LoggerService';
 import { authenticateAdmin } from '../middleware/auth';
 import DiscordNotificationService from '../services/DiscordNotificationService';
 import TelegramNotificationService from '../services/TelegramNotificationService';
+import { EmailNotificationService } from '../services/EmailNotificationService';
 import { exec } from 'child_process';
 import path from 'path';
 import crypto from 'crypto';
 
 // Global type declarations for in-memory storage
 declare global {
-  var vpsCodes: Map<string, { discordCode: string; telegramCode: string; userId: string; username: string; expiresAt: Date; attempts: number; discordMessageId?: string; telegramMessageId?: string }> | undefined;
+  var vpsCodes: Map<string, { discordCode: string; telegramCode: string; emailCode: string; userEmail: string; userId: string; username: string; expiresAt: Date; attempts: number; discordMessageId?: string; telegramMessageId?: string }> | undefined;
   var vpsAccess: Map<string, { grantedAt: Date; expiresAt: Date }> | undefined;
-  var resetLeaderboardCodes: Map<string, { discordCode: string; telegramCode: string; userId: string; username: string; expiresAt: Date; attempts: number; discordMessageId?: string; telegramMessageId?: string }> | undefined;
+  var resetLeaderboardCodes: Map<string, { discordCode: string; telegramCode: string; emailCode: string; userEmail: string; userId: string; username: string; expiresAt: Date; attempts: number; discordMessageId?: string; telegramMessageId?: string }> | undefined;
   var resetLeaderboardAccess: Map<string, { grantedAt: Date; expiresAt: Date }> | undefined;
 }
 
@@ -795,10 +796,12 @@ router.post('/users/:eightBallPoolId/block', async (req, res): Promise<void> => 
   }
 });
 
-// VPS Monitor Dual-Channel Two-Factor Authentication System
+// VPS Monitor Multi-Channel Authentication System
 interface VPSCode {
   discordCode: string;
   telegramCode: string;
+  emailCode: string;
+  userEmail: string;
   userId: string;
   username: string;
   expiresAt: Date;
@@ -824,6 +827,11 @@ setInterval(() => {
 // Generate 16-character random code
 function generateVPSCode(): string {
   return crypto.randomBytes(8).toString('hex').toUpperCase();
+}
+
+// Generate 6-digit PIN for email
+function generate6DigitPin(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 // Check if user is allowed VPS access
@@ -861,10 +869,13 @@ router.post('/vps/request-access', async (req, res) => {
       // Generate new codes
       const discordCode = generateVPSCode();
       const telegramCode = generateVPSCode();
+      const emailCode = generate6DigitPin();
       
       vpsCode = {
         discordCode,
         telegramCode,
+        emailCode,
+        userEmail: user.email || '', // Store user's email from Discord OAuth
         userId,
         username,
         expiresAt,
@@ -873,12 +884,19 @@ router.post('/vps/request-access', async (req, res) => {
       
       vpsCodes.set(userId, vpsCode);
     } else {
-      // Update expiration time
+      // Update expiration time and regenerate email code if requested
       vpsCode.expiresAt = expiresAt;
+      if (!vpsCode.emailCode) {
+        vpsCode.emailCode = generate6DigitPin();
+      }
+      if (!vpsCode.userEmail) {
+        vpsCode.userEmail = user.email || '';
+      }
     }
 
     let discordSent = false;
     let telegramSent = false;
+    let emailSent = false;
 
     // Send Discord code if requested
     if (!channel || channel === 'discord') {
@@ -966,6 +984,44 @@ router.post('/vps/request-access', async (req, res) => {
       });
     }
 
+    // Send Email code if requested
+    if ((!channel || channel === 'email') && vpsCode.userEmail) {
+      try {
+        const emailService = new EmailNotificationService();
+        
+        if (emailService.isConfigured()) {
+          emailSent = await emailService.sendPinCode(
+            vpsCode.userEmail,
+            vpsCode.emailCode,
+            'VPS Monitor Access'
+          );
+          
+          if (emailSent) {
+            logger.info('VPS access email code sent', {
+              action: 'vps_email_sent',
+              userId,
+              username,
+              email: vpsCode.userEmail
+            });
+          }
+        } else {
+          logger.warn('Email service not configured', {
+            action: 'email_not_configured',
+            userId,
+            username
+          });
+        }
+      } catch (emailError) {
+        console.error('Failed to send email:', emailError);
+        logger.warn('Email sending failed', {
+          action: 'email_error',
+          userId,
+          username,
+          error: emailError instanceof Error ? emailError.message : 'Unknown error'
+        });
+      }
+    }
+
     // Check if the requested channel succeeded
     if (channel === 'discord' && !discordSent) {
       return res.status(500).json({
@@ -978,20 +1034,30 @@ router.post('/vps/request-access', async (req, res) => {
         error: 'Failed to send Telegram access code. Please try again.'
       });
     }
+    
+    if (channel === 'email' && !emailSent) {
+      return res.status(500).json({
+        error: 'Failed to send email access code. Please check your email configuration.'
+      });
+    }
 
     logger.logAdminAction(userId, 'vps_access_requested', {
       username,
-      channel: channel || 'both',
+      channel: channel || 'all',
       discordCodeGenerated: discordSent,
-      telegramCodeGenerated: telegramSent
+      telegramCodeGenerated: telegramSent,
+      emailCodeGenerated: emailSent
     });
 
     return res.json({
       message: channel === 'discord' ? 'Discord access code sent!' : 
                channel === 'telegram' ? 'Telegram access code sent!' : 
-               `Access codes sent to: ${discordSent ? 'Discord' : ''}${discordSent && telegramSent ? ' and ' : ''}${telegramSent ? 'Telegram' : ''}`,
+               channel === 'email' ? 'Email access code sent!' :
+               `Access codes sent to: ${[discordSent && 'Discord', telegramSent && 'Telegram', emailSent && 'Email'].filter(Boolean).join(', ')}`,
       discordSent,
       telegramSent,
+      emailSent,
+      userEmail: vpsCode.userEmail || null,
       expiresIn: 5 * 60 * 1000 // 5 minutes in milliseconds
     });
 
@@ -1003,16 +1069,20 @@ router.post('/vps/request-access', async (req, res) => {
   }
 });
 
-// Verify VPS access codes (Discord + Telegram)
+// Verify VPS access codes (Discord + Telegram OR Email)
 router.post('/vps/verify-access', async (req, res) => {
   try {
-    const { discordCode, telegramCode } = req.body;
+    const { discordCode, telegramCode, emailCode } = req.body;
     const user = req.user as any;
     const userId = user.id;
 
-    if (!discordCode || !telegramCode) {
+    // User must provide either (Discord + Telegram) OR (Email)
+    const hasDiscordTelegram = discordCode && (telegramCode || !isAllowedForTelegram(userId));
+    const hasEmail = emailCode;
+
+    if (!hasDiscordTelegram && !hasEmail) {
       return res.status(400).json({
-        error: 'Both Discord and Telegram codes are required'
+        error: 'Please provide either Discord code (and Telegram if applicable) OR email code'
       });
     }
 
@@ -1040,26 +1110,42 @@ router.post('/vps/verify-access', async (req, res) => {
       });
     }
 
-    // Verify Discord code
-    if (vpsCode.discordCode !== discordCode.toUpperCase()) {
-      return res.status(400).json({
-        error: 'Invalid Discord access code.'
-      });
-    }
+    let verificationMethod = '';
 
-    // Verify Telegram code (only if user is allowed for Telegram)
-    if (isAllowedForTelegram(userId)) {
-      if (vpsCode.telegramCode !== telegramCode.toUpperCase()) {
+    // Verify Email code if provided
+    if (hasEmail && !hasDiscordTelegram) {
+      if (vpsCode.emailCode !== emailCode.trim()) {
         return res.status(400).json({
-          error: 'Invalid Telegram access code.'
+          error: 'Invalid email access code.'
         });
       }
-    } else {
-      // If user is not allowed for Telegram, they should not have a Telegram code
-      if (telegramCode && telegramCode.trim()) {
+      verificationMethod = 'email';
+    }
+    // Verify Discord + Telegram codes if provided
+    else if (hasDiscordTelegram) {
+      // Verify Discord code
+      if (vpsCode.discordCode !== discordCode.toUpperCase()) {
         return res.status(400).json({
-          error: 'You are not authorized to use Telegram authentication.'
+          error: 'Invalid Discord access code.'
         });
+      }
+
+      // Verify Telegram code (only if user is allowed for Telegram)
+      if (isAllowedForTelegram(userId)) {
+        if (vpsCode.telegramCode !== telegramCode.toUpperCase()) {
+          return res.status(400).json({
+            error: 'Invalid Telegram access code.'
+          });
+        }
+        verificationMethod = 'discord+telegram';
+      } else {
+        // If user is not allowed for Telegram, they should not have a Telegram code
+        if (telegramCode && telegramCode.trim()) {
+          return res.status(400).json({
+            error: 'You are not authorized to use Telegram authentication.'
+          });
+        }
+        verificationMethod = 'discord';
       }
     }
 
@@ -1068,76 +1154,103 @@ router.post('/vps/verify-access', async (req, res) => {
 
     // Send approval messages and schedule cleanup
     try {
-      const discordService = new DiscordNotificationService();
-      const telegramService = new TelegramNotificationService();
-      
-      // Delete the original code messages
-      if (vpsCode.discordMessageId) {
-        try {
-          await discordService.deleteMessage(userId, vpsCode.discordMessageId);
-        } catch (deleteError) {
-          console.error('Failed to delete Discord code message:', deleteError);
+      // Send approval based on verification method
+      if (verificationMethod === 'email') {
+        // Send email approval
+        const emailService = new EmailNotificationService();
+        if (emailService.isConfigured() && vpsCode.userEmail) {
+          await emailService.sendPinCode(
+            vpsCode.userEmail,
+            '✅ ACCESS GRANTED',
+            'VPS Monitor Access Approved'
+          );
         }
-      }
 
-      if (vpsCode.telegramMessageId) {
-        try {
-          await telegramService.deleteMessage(userId, vpsCode.telegramMessageId);
-        } catch (deleteError) {
-          console.error('Failed to delete Telegram code message:', deleteError);
+        logger.logAdminAction(userId, 'vps_access_granted', {
+          username: vpsCode.username,
+          verificationMethod: 'email',
+          emailUsed: vpsCode.userEmail
+        });
+      } else {
+        // Send Discord/Telegram approval messages
+        const discordService = new DiscordNotificationService();
+        const telegramService = new TelegramNotificationService();
+        
+        // Delete the original code messages
+        if (vpsCode.discordMessageId) {
+          try {
+            await discordService.deleteMessage(userId, vpsCode.discordMessageId);
+          } catch (deleteError) {
+            console.error('Failed to delete Discord code message:', deleteError);
+          }
         }
-      }
 
-      // Send approval messages
-      const discordApproval = await discordService.sendDirectMessage(
-        userId,
-        `✅ **VPS Monitor Access Approved**\n\n` +
-        `You now have access to the VPS Monitor for this session.\n` +
-        `Both Discord and Telegram codes verified successfully.\n` +
-        `This message will be automatically deleted in 24 hours.`
-      );
-
-      const telegramApproval = await telegramService.sendDirectMessage(
-        userId,
-        `✅ *VPS Monitor Access Approved*\n\n` +
-        `You now have access to the VPS Monitor for this session.\n` +
-        `Both Discord and Telegram codes verified successfully.\n` +
-        `This message will be automatically deleted in 24 hours.`
-      );
-
-      // Schedule approval message deletion after 24 hours
-      if (discordApproval && discordApproval.id) {
-        setTimeout(async () => {
+        if (vpsCode.telegramMessageId) {
           try {
-            await discordService.deleteMessage(userId, discordApproval.id!);
+            await telegramService.deleteMessage(userId, vpsCode.telegramMessageId);
           } catch (deleteError) {
-            console.error('Failed to delete Discord approval message:', deleteError);
+            console.error('Failed to delete Telegram code message:', deleteError);
           }
-        }, 24 * 60 * 60 * 1000); // 24 hours
-      }
+        }
 
-      if (telegramApproval && telegramApproval.id) {
-        setTimeout(async () => {
-          try {
-            await telegramService.deleteMessage(userId, telegramApproval.id!);
-          } catch (deleteError) {
-            console.error('Failed to delete Telegram approval message:', deleteError);
+        // Send approval messages
+        const authMethod = verificationMethod === 'discord+telegram' ? 
+          'Both Discord and Telegram codes verified successfully.' :
+          'Discord code verified successfully.';
+        
+        const discordApproval = await discordService.sendDirectMessage(
+          userId,
+          `✅ **VPS Monitor Access Approved**\n\n` +
+          `You now have access to the VPS Monitor for this session.\n` +
+          `${authMethod}\n` +
+          `This message will be automatically deleted in 24 hours.`
+        );
+
+        if (verificationMethod === 'discord+telegram') {
+          const telegramApproval = await telegramService.sendDirectMessage(
+            userId,
+            `✅ *VPS Monitor Access Approved*\n\n` +
+            `You now have access to the VPS Monitor for this session.\n` +
+            `${authMethod}\n` +
+            `This message will be automatically deleted in 24 hours.`
+          );
+
+          // Schedule approval message deletion after 24 hours
+          if (telegramApproval && telegramApproval.id) {
+            setTimeout(async () => {
+              try {
+                await telegramService.deleteMessage(userId, telegramApproval.id!);
+              } catch (deleteError) {
+                console.error('Failed to delete Telegram approval message:', deleteError);
+              }
+            }, 24 * 60 * 60 * 1000); // 24 hours
           }
-        }, 24 * 60 * 60 * 1000); // 24 hours
-      }
+        }
 
-      logger.logAdminAction(userId, 'vps_access_granted', {
-        username: vpsCode.username,
-        discordCodeUsed: discordCode,
-        telegramCodeUsed: telegramCode,
-        dualChannelAuth: true
-      });
+        // Schedule approval message deletion after 24 hours
+        if (discordApproval && discordApproval.id) {
+          setTimeout(async () => {
+            try {
+              await discordService.deleteMessage(userId, discordApproval.id!);
+            } catch (deleteError) {
+              console.error('Failed to delete Discord approval message:', deleteError);
+            }
+          }, 24 * 60 * 60 * 1000); // 24 hours
+        }
+
+        logger.logAdminAction(userId, 'vps_access_granted', {
+          username: vpsCode.username,
+          verificationMethod,
+          discordCodeUsed: discordCode,
+          telegramCodeUsed: telegramCode
+        });
+      }
 
       // Clean up the codes
       vpsCodes.delete(userId);
 
       return res.json({
-        message: 'Access granted - both codes verified successfully',
+        message: `Access granted - ${verificationMethod === 'email' ? 'email code' : 'codes'} verified successfully`,
         accessToken: crypto.randomBytes(32).toString('hex') // Simple session token
       });
 
@@ -1272,10 +1385,13 @@ router.post('/reset-leaderboard/request-access', async (req, res) => {
       // Generate new codes
       const discordCode = generateVPSCode();
       const telegramCode = generateVPSCode();
+      const emailCode = generate6DigitPin();
       
       resetCode = {
         discordCode,
         telegramCode,
+        emailCode,
+        userEmail: user.email || '',
         userId,
         username,
         expiresAt,
@@ -1287,12 +1403,19 @@ router.post('/reset-leaderboard/request-access', async (req, res) => {
       }
       global.resetLeaderboardCodes.set(userId, resetCode);
     } else {
-      // Update expiration time
+      // Update expiration time and regenerate email code if requested
       resetCode.expiresAt = expiresAt;
+      if (!resetCode.emailCode) {
+        resetCode.emailCode = generate6DigitPin();
+      }
+      if (!resetCode.userEmail) {
+        resetCode.userEmail = user.email || '';
+      }
     }
 
     let discordSent = false;
     let telegramSent = false;
+    let emailSent = false;
 
     // Send Discord code if requested
     if (!channel || channel === 'discord') {
