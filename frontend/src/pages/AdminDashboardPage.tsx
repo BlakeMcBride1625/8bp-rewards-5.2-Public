@@ -1624,15 +1624,15 @@ const AdminDashboardPage: React.FC = () => {
                 </p>
               </div>
             ) : !mfaVerified ? (
-              <div className="card">
-                <h2 className="text-xl font-semibold text-text-primary dark:text-text-dark-primary mb-6">
-                  Multi-Factor Authentication Required
-                </h2>
-                <p className="text-text-secondary dark:text-text-dark-secondary mb-6">
-                  Please verify your codes to access the Terminal. You can use either Discord/Telegram codes OR email code.
-                </p>
-                
-                <div className="space-y-4">
+              <div className="max-w-md mx-auto">
+                <div className="card text-center">
+                  <h2 className="text-xl font-semibold text-text-primary dark:text-text-dark-primary mb-6">
+                    Multi-Factor Authentication Required
+                  </h2>
+                  <p className="text-text-secondary dark:text-text-dark-secondary mb-6">
+                    Please verify your codes to access the Terminal. You can use either Discord/Telegram codes OR email code.
+                  </p>
+                  
                   {/* Request Codes Button */}
                   <div className="mb-6">
                     <button
@@ -1648,76 +1648,79 @@ const AdminDashboardPage: React.FC = () => {
                     </p>
                   </div>
                   
-                  {/* Discord Code Input */}
-                  {codesSent.discord && (
-                    <div>
-                      <label className="label">Discord Code (16 digits)</label>
-                      <input
-                        type="text"
-                        value={discordCode}
-                        onChange={(e) => setDiscordCode(e.target.value)}
-                        placeholder="Enter 16-digit Discord code..."
-                        className="input"
-                        maxLength={16}
-                      />
-                    </div>
-                  )}
-                  
-                  {/* Telegram Code Input */}
-                  {codesSent.telegram && (
-                    <div>
-                      <label className="label">Telegram Code (16 digits)</label>
-                      <input
-                        type="text"
-                        value={telegramCode}
-                        onChange={(e) => setTelegramCode(e.target.value)}
-                        placeholder="Enter 16-digit Telegram code..."
-                        className="input"
-                        maxLength={16}
-                      />
-                    </div>
-                  )}
-                  
-                  {/* Email Code Input */}
-                  {codesSent.email && userEmail && (
-                    <div>
-                      <div className="text-xs text-text-secondary dark:text-text-dark-secondary text-center mb-2">
-                        📧 Code sent to: <span className="font-medium">{userEmail}</span>
-                      </div>
-                      <label className="label">Email Access Code (6 digits)</label>
-                      <input
-                        type="text"
-                        value={emailCode}
-                        onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
-                        placeholder="Enter 6-digit code"
-                        className="input text-center text-2xl tracking-widest font-mono"
-                        maxLength={6}
-                      />
-                    </div>
-                  )}
-                  
-                  {/* Verify Button */}
+                  {/* Input Fields - Only show when codes are sent */}
                   {(codesSent.discord || codesSent.telegram || codesSent.email) && (
-                    <button
-                      onClick={verifyMFA}
-                      disabled={
-                        isRequestingCodes || 
-                        (codesSent.email && emailCode.trim().length !== 6) ||
-                        (!codesSent.email && (!discordCode.trim() || (codesSent.telegram && !telegramCode.trim())))
-                      }
-                      className="btn btn-primary inline-flex items-center space-x-2"
-                    >
-                      <Shield className="w-4 h-4" />
-                      <span>Verify MFA</span>
-                    </button>
-                  )}
-                  
-                  {/* Error Messages */}
-                  {(discordCode.length > 0 && discordCode.length !== 16) || (telegramCode.length > 0 && telegramCode.length !== 16) || (emailCode.length > 0 && emailCode.length !== 6) ? (
-                    <div className="text-sm text-red-600 dark:text-red-400">
-                      ⚠️ {codesSent.email ? 'Email code must be exactly 6 digits' : 'Discord and Telegram codes must be exactly 16 digits'}
+                    <div className="space-y-4">
+                      {/* Discord Code Input */}
+                      {codesSent.discord && (
+                        <div>
+                          <label className="label">Discord Code (16 digits)</label>
+                          <input
+                            type="text"
+                            value={discordCode}
+                            onChange={(e) => setDiscordCode(e.target.value)}
+                            placeholder="Enter 16-digit Discord code..."
+                            className="input"
+                            maxLength={16}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Telegram Code Input */}
+                      {codesSent.telegram && (
+                        <div>
+                          <label className="label">Telegram Code (16 digits)</label>
+                          <input
+                            type="text"
+                            value={telegramCode}
+                            onChange={(e) => setTelegramCode(e.target.value)}
+                            placeholder="Enter 16-digit Telegram code..."
+                            className="input"
+                            maxLength={16}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Email Code Input */}
+                      {codesSent.email && userEmail && (
+                        <div>
+                          <div className="text-xs text-text-secondary dark:text-text-dark-secondary text-center mb-2">
+                            📧 Code sent to: <span className="font-medium">{userEmail}</span>
+                          </div>
+                          <label className="label">Email Access Code (6 digits)</label>
+                          <input
+                            type="text"
+                            value={emailCode}
+                            onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
+                            placeholder="Enter 6-digit code"
+                            className="input text-center text-2xl tracking-widest font-mono"
+                            maxLength={6}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Verify Button */}
+                      <button
+                        onClick={verifyMFA}
+                        disabled={
+                          isRequestingCodes || 
+                          (codesSent.email && emailCode.trim().length !== 6) ||
+                          (!codesSent.email && (!discordCode.trim() || (codesSent.telegram && !telegramCode.trim())))
+                        }
+                        className="btn btn-primary inline-flex items-center space-x-2"
+                      >
+                        <Shield className="w-4 h-4" />
+                        <span>Verify MFA</span>
+                      </button>
+                      
+                      {/* Error Messages */}
+                      {(discordCode.length > 0 && discordCode.length !== 16) || (telegramCode.length > 0 && telegramCode.length !== 16) || (emailCode.length > 0 && emailCode.length !== 6) ? (
+                        <div className="text-sm text-red-600 dark:text-red-400">
+                          ⚠️ {codesSent.email ? 'Email code must be exactly 6 digits' : 'Discord and Telegram codes must be exactly 16 digits'}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
+                  )}
                 </div>
               </div>
             ) : (
