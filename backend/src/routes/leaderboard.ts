@@ -45,6 +45,7 @@ router.get('/', async (req, res) => {
           _id: '$_id.userId',
           totalClaims: { $sum: 1 }, // Count unique days
           successfulClaims: { $sum: '$successfulClaims' },
+          totalClaimsActual: { $sum: '$totalClaims' }, // Sum actual claim counts
           failedClaims: { $sum: { $subtract: ['$totalClaims', '$successfulClaims'] } },
           totalItemsClaimed: { $sum: { $size: '$itemsClaimed' } },
           lastClaimed: { $max: '$lastClaimed' }
@@ -70,8 +71,8 @@ router.get('/', async (req, res) => {
           successfulClaims: entry.successfulClaims,
           failedClaims: entry.failedClaims || 0,
           totalItemsClaimed: entry.totalItemsClaimed,
-          successRate: entry.totalClaims > 0 
-            ? Math.round((entry.successfulClaims / entry.totalClaims) * 100) 
+          successRate: entry.totalClaimsActual > 0 
+            ? Math.round((entry.successfulClaims / entry.totalClaimsActual) * 100) 
             : 0,
           lastClaimed: entry.lastClaimed
         };
@@ -142,6 +143,7 @@ router.get('/user/:eightBallPoolId', async (req, res): Promise<void> => {
           _id: '$_id.userId',
           totalClaims: { $sum: 1 }, // Count unique days
           successfulClaims: { $sum: '$successfulClaims' },
+          totalClaimsActual: { $sum: '$totalClaims' }, // Sum actual claim counts
           failedClaims: { $sum: { $subtract: ['$totalClaims', '$successfulClaims'] } },
           totalItemsClaimed: { $sum: { $size: '$itemsClaimed' } },
           lastClaimed: { $max: '$lastClaimed' }
@@ -205,8 +207,8 @@ router.get('/user/:eightBallPoolId', async (req, res): Promise<void> => {
       successfulClaims: userStat.successfulClaims,
       failedClaims: userStat.failedClaims || 0,
       totalItemsClaimed: userStat.totalItemsClaimed,
-      successRate: userStat.totalClaims > 0 
-        ? Math.round((userStat.successfulClaims / userStat.totalClaims) * 100) 
+      successRate: userStat.totalClaimsActual > 0 
+        ? Math.round((userStat.successfulClaims / userStat.totalClaimsActual) * 100) 
         : 0,
       lastClaimed: userStat.lastClaimed,
       timeframe,
@@ -261,6 +263,7 @@ router.get('/stats', async (req, res) => {
         $group: {
           _id: null,
           totalClaims: { $sum: 1 }, // Count unique user-days
+          totalClaimsActual: { $sum: '$totalClaims' }, // Sum actual claim counts
           successfulClaims: { $sum: '$successfulClaims' },
           failedClaims: { $sum: { $subtract: ['$totalClaims', '$successfulClaims'] } },
           totalItemsClaimed: { $sum: { $size: '$itemsClaimed' } },
@@ -277,8 +280,8 @@ router.get('/stats', async (req, res) => {
           uniqueUsers: { $size: '$uniqueUsers' },
           successRate: {
             $cond: [
-              { $gt: ['$totalClaims', 0] },
-              { $multiply: [{ $divide: ['$successfulClaims', '$totalClaims'] }, 100] },
+              { $gt: ['$totalClaimsActual', 0] },
+              { $multiply: [{ $divide: ['$successfulClaims', '$totalClaimsActual'] }, 100] },
               0
             ]
           }
