@@ -446,9 +446,9 @@ router.post('/request-codes', async (req, res) => {
       }
     }
     
-    // Send Email code if requested or if no specific channel (try to send to all configured emails)
+    // Send Email code if requested
     const allowedEmails = process.env.ADMIN_EMAILS?.split(',').map(email => email.trim()) || [];
-    if ((!channel || channel === 'email')) {
+    if (channel === 'email') {
       
       if (userEmail) {
         // Single email provided
@@ -494,32 +494,6 @@ router.post('/request-codes', async (req, res) => {
             });
           }
         }
-      } else if (!channel && allowedEmails.length > 0) {
-        // No specific channel requested and we have allowed emails - send to first one
-        const firstAllowedEmail = allowedEmails[0];
-        try {
-          const emailService = new EmailNotificationService();
-          if (emailService.isConfigured()) {
-            emailSent = await emailService.sendPinCode(
-              firstAllowedEmail,
-              emailCode,
-              'Terminal Access'
-            );
-            logger.info('Email MFA code sent to first allowed email', {
-              action: 'email_mfa_sent',
-              userId,
-              userEmail: firstAllowedEmail,
-              code: emailCode.substring(0, 2) + '****'
-            });
-          }
-        } catch (emailError) {
-          logger.error('Failed to send email MFA code to first allowed email', {
-            action: 'email_mfa_error',
-            userId,
-            userEmail: firstAllowedEmail,
-            error: emailError instanceof Error ? emailError.message : 'Unknown error'
-          });
-        }
       }
     }
     
@@ -552,7 +526,7 @@ router.post('/request-codes', async (req, res) => {
       discordSent,
       telegramSent,
       emailSent,
-      userEmail: userEmail || (emailSent ? allowedEmails[0] : '')
+      userEmail: userEmail || ''
     });
     
   } catch (error) {

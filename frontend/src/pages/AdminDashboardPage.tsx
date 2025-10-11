@@ -606,50 +606,80 @@ const AdminDashboardPage: React.FC = () => {
     }
   };
 
-  const requestMFACodes = async () => {
+  const requestMFACodes = async (channel?: string) => {
     setIsRequestingCodes(true);
     try {
-      const response = await axios.post('/api/admin/terminal/request-codes', {}, { withCredentials: true });
+      const response = await axios.post('/api/admin/terminal/request-codes', { 
+        channel: channel || undefined
+      }, { withCredentials: true });
       
       if (response.data.success) {
-        let codesSentCount = 0;
-        let message = 'MFA codes sent: ';
-        const sentMethods = [];
-        
-        if (response.data.discordSent) {
-          setCodesSent(prev => ({ ...prev, discord: true }));
-          sentMethods.push('Discord');
-          codesSentCount++;
-        }
-        
-        if (response.data.telegramSent) {
-          setCodesSent(prev => ({ ...prev, telegram: true }));
-          sentMethods.push('Telegram');
-          codesSentCount++;
-        }
-        
-        if (response.data.emailSent) {
-          setCodesSent(prev => ({ ...prev, email: true }));
-          setUserEmail(response.data.userEmail);
-          sentMethods.push('Email');
-          codesSentCount++;
-        }
-        
-        if (codesSentCount > 0) {
-          message += sentMethods.join(', ');
-          message += '. Please check your messages and enter the codes below.';
-          toast.success(message);
+        if (channel === 'discord') {
+          if (response.data.discordSent) {
+            setCodesSent(prev => ({ ...prev, discord: true }));
+            toast.success('Discord access code sent!');
+          } else {
+            toast.error('Failed to send Discord code');
+          }
+        } else if (channel === 'telegram') {
+          if (response.data.telegramSent) {
+            setCodesSent(prev => ({ ...prev, telegram: true }));
+            toast.success('Telegram access code sent!');
+          } else {
+            toast.error('Failed to send Telegram code');
+          }
         } else {
-          toast.success('MFA codes generated. Please use the codes provided.');
+          // Fallback to sending all codes
+          let codesSentCount = 0;
+          let message = 'MFA codes sent: ';
+          const sentMethods = [];
+          
+          if (response.data.discordSent) {
+            setCodesSent(prev => ({ ...prev, discord: true }));
+            sentMethods.push('Discord');
+            codesSentCount++;
+          }
+          
+          if (response.data.telegramSent) {
+            setCodesSent(prev => ({ ...prev, telegram: true }));
+            sentMethods.push('Telegram');
+            codesSentCount++;
+          }
+          
+          if (response.data.emailSent) {
+            setCodesSent(prev => ({ ...prev, email: true }));
+            setUserEmail(response.data.userEmail);
+            sentMethods.push('Email');
+            codesSentCount++;
+          }
+          
+          if (codesSentCount > 0) {
+            message += sentMethods.join(', ');
+            message += '. Please check your messages and enter the codes below.';
+            toast.success(message);
+          } else {
+            toast.success('MFA codes generated. Please use the codes provided.');
+          }
         }
       } else {
         toast.error('Failed to request MFA codes');
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to request MFA codes');
+      if (error.response?.status === 403) {
+        toast.error('Your email is not authorized for email authentication. Please use Discord/Telegram authentication.');
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to request MFA codes');
+      }
       console.error('Error requesting MFA codes:', error);
     } finally {
       setIsRequestingCodes(false);
+    }
+  };
+
+  const requestEmailCode = async () => {
+    const email = prompt('Enter your email address for authentication:');
+    if (email && email.trim()) {
+      await requestMFACodes('email');
     }
   };
 
@@ -1633,19 +1663,64 @@ const AdminDashboardPage: React.FC = () => {
                     Please verify your codes to access the Terminal. You can use either Discord/Telegram codes OR email code.
                   </p>
                   
-                  {/* Request Codes Button */}
+                  {/* Request Access Codes Section */}
                   <div className="mb-6">
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                        <Send className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                      </div>
+                    </div>
+                    <h3 className="text-lg font-medium text-text-primary dark:text-text-dark-primary mb-2">
+                      Request Access Codes
+                    </h3>
+                    <p className="text-text-secondary dark:text-text-dark-secondary mb-6">
+                      Request access codes via Discord, Telegram, or Email. You'll need the provided code to access the Terminal.
+                    </p>
+                  </div>
+                  
+                  {/* Authentication Buttons */}
+                  <div className="space-y-4 mb-6">
+                    {/* Discord Button */}
                     <button
-                      onClick={() => requestMFACodes()}
-                      disabled={isRequestingCodes}
-                      className="btn btn-outline inline-flex items-center space-x-2"
+                      onClick={() => requestMFACodes('discord')}
+                      disabled={isRequestingCodes || codesSent.discord}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center space-x-2"
                     >
                       <Send className="w-4 h-4" />
-                      <span>{isRequestingCodes ? 'Requesting Codes...' : 'Request MFA Codes'}</span>
+                      <span>{codesSent.discord ? 'Discord Code Sent ✓' : 'Send Discord Code'}</span>
                     </button>
-                    <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-2">
-                      Click this button to receive verification codes via Discord, Telegram, or Email.
-                    </p>
+                    
+                    {/* Telegram Button */}
+                    <button
+                      onClick={() => requestMFACodes('telegram')}
+                      disabled={isRequestingCodes || codesSent.telegram}
+                      className="w-full bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center space-x-2"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>{codesSent.telegram ? 'Telegram Code Sent ✓' : 'Send Telegram Code'}</span>
+                    </button>
+                    
+                    {/* Divider */}
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                      </div>
+                      <div className="relative flex justify-center text-sm">
+                        <span className="px-2 bg-white dark:bg-background-dark-secondary text-text-secondary dark:text-text-dark-secondary">
+                          or
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Email Button */}
+                    <button
+                      onClick={requestEmailCode}
+                      disabled={isRequestingCodes || codesSent.email}
+                      className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center space-x-2"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>{codesSent.email ? 'Email Code Sent ✓' : 'Send Email Code (6-Digit PIN)'}</span>
+                    </button>
                   </div>
                   
                   {/* Input Fields - Only show when codes are sent */}
@@ -1721,6 +1796,13 @@ const AdminDashboardPage: React.FC = () => {
                       ) : null}
                     </div>
                   )}
+                  
+                  {/* Footer */}
+                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <p className="text-xs text-text-secondary dark:text-text-dark-secondary text-center">
+                      🔒 Secure authentication via Discord, Telegram, or Email • Codes expire in 5 minutes
+                    </p>
+                  </div>
                 </div>
               </div>
             ) : (
