@@ -398,7 +398,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Blake McBride**
 - GitHub: [@BlakeMcBride1625](https://github.com/BlakeMcBride1625)
-- Discord: BlakeMcBride#1625
+- Discord: [epildev](https://discord.com/users/850726663289700373)
 
 ---
 
