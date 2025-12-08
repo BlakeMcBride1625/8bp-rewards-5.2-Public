@@ -508,6 +508,33 @@ class WebSocketService {
     });
   }
 
+  /**
+   * Emit leaderboard data update event - used when verification data (level/rank) changes
+   * This broadcasts to all connected clients to refresh their leaderboard data
+   */
+  public emitLeaderboardDataUpdate(data: {
+    eightBallPoolId: string;
+    account_level?: number | null;
+    account_rank?: string | null;
+    username?: string | null;
+  }): void {
+    if (!this.io) {
+      logger.warn('WebSocket server not initialized, cannot emit leaderboard data update');
+      return;
+    }
+
+    // Broadcast to all connected clients
+    this.io.emit('leaderboard-data-update', data);
+    
+    logger.info('Emitted leaderboard data update event', {
+      action: 'websocket_emit_leaderboard_data_update',
+      eightBallPoolId: data.eightBallPoolId,
+      account_level: data.account_level,
+      account_rank: data.account_rank,
+      connectedClients: this.io.sockets.sockets.size
+    });
+  }
+
   public getIO(): SocketIOServer | null {
     return this.io;
   }

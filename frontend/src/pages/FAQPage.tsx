@@ -62,7 +62,8 @@ const faqItems: FAQItem[] = [
 ];
 
 const FAQPage: React.FC = () => {
-	const [openIndex, setOpenIndex] = useState<number | null>(0);
+	// Start with all FAQ items collapsed (null = none open)
+	const [openIndex, setOpenIndex] = useState<number | null>(null);
 
 	const handleToggle = (index: number) => {
 		setOpenIndex((current) => (current === index ? null : index));

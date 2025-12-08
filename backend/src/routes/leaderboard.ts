@@ -6,11 +6,42 @@ import { getDiscordAvatarUrl } from '../utils/avatarUtils';
 const router = express.Router();
 const dbService = DatabaseService.getInstance();
 
+// Simple in-memory cache for leaderboard results (30-second TTL)
+const leaderboardCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 30000; // 30 seconds
+
+/**
+ * Clear the leaderboard cache - call this when verification data changes
+ */
+export function clearLeaderboardCache(): void {
+  leaderboardCache.clear();
+  logger.info('Leaderboard cache cleared', {
+    action: 'leaderboard_cache_cleared'
+  });
+}
+
 // Get leaderboard
 router.get('/', async (req, res): Promise<void> => {
   try {
+    // Cache for 30 seconds to reduce load
+    res.set('Cache-Control', 'public, max-age=30');
+    
     const timeframe = req.query.timeframe as string || '7d';
     const limit = parseInt(req.query.limit as string) || 50;
+    
+    // Check cache first
+    const cacheKey = `${timeframe}-${limit}`;
+    const cached = leaderboardCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      logger.info('Returning cached leaderboard data', {
+        action: 'leaderboard_cache_hit',
+        timeframe,
+        limit,
+        cacheAge: Date.now() - cached.timestamp
+      });
+      res.json(cached.data);
+      return;
+    }
     
     // Calculate date range based on timeframe
     const days = getDaysFromTimeframe(timeframe);
@@ -19,6 +50,12 @@ router.get('/', async (req, res): Promise<void> => {
 
     // Use optimised SQL aggregation instead of fetching all records
     let leaderboardData: any[] = [];
+    let totalStats = {
+      totalUsers: 0,
+      totalSuccessfulClaims: 0,
+      totalFailedClaims: 0
+    };
+    
     try {
       // Optimised SQL query that aggregates in the database
       // Exclude failed claims where user has successful claim on same day (duplicate attempts, not real failures)
@@ -74,6 +111,25 @@ router.get('/', async (req, res): Promise<void> => {
           setTimeout(() => reject(new Error('Query timeout')), 15000)
         )
       ]);
+      
+      // Also get total user count and aggregate stats (without limit) for summary
+      const totalStatsQuery = `
+        SELECT 
+          COUNT(DISTINCT r.eight_ball_pool_id) as total_users,
+          COUNT(*) FILTER (WHERE cr.status = 'success') as total_successful_claims,
+          COUNT(*) FILTER (WHERE cr.status = 'failed') as total_failed_claims
+        FROM claim_records cr
+        INNER JOIN registrations r ON cr.eight_ball_pool_id = r.eight_ball_pool_id
+        WHERE cr.claimed_at >= $1
+          AND r.username IS NOT NULL
+      `;
+      
+      const totalStatsResult = await dbService.executeQuery(totalStatsQuery, [startDate]);
+      totalStats = {
+        totalUsers: parseInt(totalStatsResult.rows[0]?.total_users || 0),
+        totalSuccessfulClaims: parseInt(totalStatsResult.rows[0]?.total_successful_claims || 0),
+        totalFailedClaims: parseInt(totalStatsResult.rows[0]?.total_failed_claims || 0)
+      };
       
       leaderboardData = result.rows.map((row: any) => {
         const successfulClaims = parseInt(row.successful_claims);
@@ -180,12 +236,25 @@ router.get('/', async (req, res): Promise<void> => {
         lastClaimed: entry.lastClaimed
       }));
 
-    res.json({
+    const responseData = {
       timeframe,
       period: `${days} days`,
-      totalUsers: leaderboard.length,
+      totalUsers: totalStats.totalUsers,
+      totalSuccessfulClaims: totalStats.totalSuccessfulClaims,
+      totalFailedClaims: totalStats.totalFailedClaims,
       leaderboard
-    });
+    };
+    
+    // Cache the result
+    leaderboardCache.set(cacheKey, { data: responseData, timestamp: Date.now() });
+    
+    // Clean up old cache entries (keep only last 10 entries)
+    if (leaderboardCache.size > 10) {
+      const oldestKey = Array.from(leaderboardCache.keys())[0];
+      leaderboardCache.delete(oldestKey);
+    }
+    
+    res.json(responseData);
 
   } catch (error) {
     logger.error('Failed to retrieve leaderboard', {

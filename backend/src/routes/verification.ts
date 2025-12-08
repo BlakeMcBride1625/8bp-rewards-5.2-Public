@@ -2,6 +2,8 @@ import express from 'express';
 import { DatabaseService } from '../services/DatabaseService';
 import { logger } from '../services/LoggerService';
 import DiscordNotificationService from '../services/DiscordNotificationService';
+import WebSocketService from '../services/WebSocketService';
+import { clearLeaderboardCache } from './leaderboard';
 import { getRandom8BPAvatar } from '../utils/avatarUtils';
 
 const router = express.Router();
@@ -90,16 +92,25 @@ router.post('/sync', async (req, res): Promise<void> => {
 			const finalLevel = shouldUpdateLevel ? level : existingRegistration.account_level;
 			const finalRank = shouldUpdateRank ? rank_name : existingRegistration.account_rank;
 			
-			logger.info('Registration updated successfully with verification data', {
-				eightBallPoolId: existingRegistration.eightBallPoolId,
-				username_preserved: existingRegistration.username,
-				account_level_updated: shouldUpdateLevel,
-				final_account_level: finalLevel,
-				account_rank_updated: shouldUpdateRank,
-				final_account_rank: finalRank,
-			});
+		logger.info('Registration updated successfully with verification data', {
+			eightBallPoolId: existingRegistration.eightBallPoolId,
+			username_preserved: existingRegistration.username,
+			account_level_updated: shouldUpdateLevel,
+			final_account_level: finalLevel,
+			account_rank_updated: shouldUpdateRank,
+			final_account_rank: finalRank,
+		});
 
-			// Send Discord notification to registration channel
+		// Clear leaderboard cache and emit WebSocket event so frontends update
+		clearLeaderboardCache();
+		WebSocketService.emitLeaderboardDataUpdate({
+			eightBallPoolId: existingRegistration.eightBallPoolId,
+			account_level: finalLevel,
+			account_rank: finalRank,
+			username: existingRegistration.username
+		});
+
+		// Send Discord notification to registration channel
 			// Use existing username (preserved) for display, not the username from the image
 			try {
 				await discordNotificationService.sendVerificationConfirmation(
@@ -127,30 +138,46 @@ router.post('/sync', async (req, res): Promise<void> => {
 			return;
 		}
 
-		// Create new registration
-		logger.info('Creating new rewards registration from verification', {
-			eightBallPoolId: unique_id,
-			discord_id,
-			username_from_image: username,
-			level,
-			rank_name
-		});
+	// Create new registration
+	logger.info('Creating new rewards registration from verification', {
+		eightBallPoolId: unique_id,
+		discord_id,
+		username_from_image: username,
+		level,
+		rank_name
+	});
 
-		// Create new registration (no random avatar assignment)
-		const newRegistration = await dbService.createRegistration({
-			eightBallPoolId: normalizedUniqueId, // Use normalized ID (no dashes)
-			username: username,
-			discordId: discord_id,
+	// Get a random avatar for new registrations
+	const randomAvatar = getRandom8BPAvatar();
+	logger.info('Assigning random avatar to new verification registration', {
+		eightBallPoolId: normalizedUniqueId,
+		avatarFilename: randomAvatar || 'none-available'
+	});
+
+	// Create new registration with random avatar
+	const newRegistration = await dbService.createRegistration({
+		eightBallPoolId: normalizedUniqueId, // Use normalized ID (no dashes)
+		username: username,
+		discordId: discord_id,
+		account_level: level,
+		account_rank: rank_name,
+		verified_at: new Date(),
+		registrationIp: 'verification-bot',
+		deviceId: 'verification-bot',
+		deviceType: 'bot',
+		userAgent: 'verification-bot',
+		lastLoginAt: new Date(),
+		isActive: true,
+		eight_ball_pool_avatar_filename: randomAvatar || null // Assign random avatar
+	});
+
+		// Clear leaderboard cache and emit WebSocket event so frontends update
+		clearLeaderboardCache();
+		WebSocketService.emitLeaderboardDataUpdate({
+			eightBallPoolId: normalizedUniqueId,
 			account_level: level,
 			account_rank: rank_name,
-			verified_at: new Date(),
-			registrationIp: 'verification-bot',
-			deviceId: 'verification-bot',
-			deviceType: 'bot',
-			userAgent: 'verification-bot',
-			lastLoginAt: new Date(),
-			isActive: true,
-			eight_ball_pool_avatar_filename: null
+			username: username
 		});
 
 		// Send Discord notification to registration channel

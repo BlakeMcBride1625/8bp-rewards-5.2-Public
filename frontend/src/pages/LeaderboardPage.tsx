@@ -5,6 +5,7 @@ import { Trophy, Medal, TrendingUp, Clock, Filter, Search, AlertTriangle } from 
 import { API_ENDPOINTS } from '../config/api';
 import Skeleton from '../components/Skeleton';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { logger } from '../utils/logger';
 
 interface LeaderboardEntry {
   rank: number;
@@ -43,27 +44,25 @@ const LeaderboardPage: React.FC = () => {
   const { socket } = useWebSocket({ autoConnect: true });
 
   // Get avatar display - use avatarUrl from API if available, otherwise fallback
-  const getAvatarDisplay = (entry: LeaderboardEntry) => {
+  // Memoized to prevent unnecessary re-renders
+  const getAvatarDisplay = useCallback((entry: LeaderboardEntry) => {
     if (entry.avatarUrl) {
       // Use the computed avatarUrl from the backend (respects priority)
+      // Only use avatarRefreshKey for cache-busting (no Date.now() or Math.random())
       return (
         <img
-          key={`leaderboard-avatar-${entry.eightBallPoolId}-${avatarRefreshKey}-${Date.now()}`}
-          src={`${entry.avatarUrl}?v=${avatarRefreshKey}&t=${Date.now()}&cb=${Math.random()}`}
+          key={`avatar-${entry.eightBallPoolId}`}
+          src={`${entry.avatarUrl}?v=${avatarRefreshKey}`}
           alt={entry.username || entry.user_id}
           className="w-8 h-8 rounded-full object-cover border-2 border-white dark:border-background-dark-secondary"
-          onLoad={() => {
-            console.log('Leaderboard avatar loaded:', entry.avatarUrl);
-          }}
           onError={(e) => {
-            console.error('Leaderboard avatar failed to load:', entry.avatarUrl);
             // Fallback to initial if image fails to load
             const target = e.target as HTMLImageElement;
             target.style.display = 'none';
             const parent = target.parentElement;
-            if (parent) {
+            if (parent && !parent.querySelector('.avatar-fallback')) {
               const fallback = document.createElement('div');
-              fallback.className = `w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${
+              fallback.className = `avatar-fallback w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${
                 entry.rank === 1 ? 'bg-yellow-500' :
                 entry.rank === 2 ? 'bg-gray-400' :
                 entry.rank === 3 ? 'bg-orange-500' :
@@ -78,7 +77,7 @@ const LeaderboardPage: React.FC = () => {
     }
     // No avatar URL - show nothing
     return null;
-  };
+  }, [avatarRefreshKey]);
 
   const timeframes = [
     { value: '1d', label: 'Last 24 Hours' },
@@ -90,21 +89,18 @@ const LeaderboardPage: React.FC = () => {
     { value: '1y', label: 'Last Year' },
   ];
 
+  // Fetch function WITHOUT dependencies to prevent closure issues
   const fetchLeaderboard = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Add cache-busting timestamp to force fresh data
       const timestamp = Date.now();
-      // Fetch filtered leaderboard data
       const response = await axios.get(`${API_ENDPOINTS.LEADERBOARD}?timeframe=${timeframe}&limit=${limit}&_t=${timestamp}`, { withCredentials: true });
       setLeaderboardData(response.data);
+      setTotalStats(response.data);
       
-      // Fetch complete stats (no limit) for totals
-      const totalResponse = await axios.get(`${API_ENDPOINTS.LEADERBOARD}?timeframe=${timeframe}&limit=1000&_t=${timestamp}`, { withCredentials: true });
-      setTotalStats(totalResponse.data);
-      
-      console.log('📊 Leaderboard: Data refreshed', {
+      logger.debug('📊 Leaderboard: Data refreshed', {
         entries: response.data?.leaderboard?.length || 0,
+        totalUsers: response.data?.totalUsers || 0,
         timestamp
       });
       
@@ -117,50 +113,83 @@ const LeaderboardPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [timeframe, limit]);
+  }, [timeframe, limit]); // Dependencies here
 
+  // Initial fetch when timeframe/limit change
   useEffect(() => {
     fetchLeaderboard();
   }, [fetchLeaderboard]);
 
-  // Listen for avatar updates and refresh leaderboard
+  // Background fetch that preserves scroll and doesn't show loading state
+  const backgroundFetchLeaderboard = useCallback(async () => {
+    try {
+      const scrollPosition = window.scrollY;
+      const timestamp = Date.now();
+      const response = await axios.get(`${API_ENDPOINTS.LEADERBOARD}?timeframe=${timeframe}&limit=${limit}&_t=${timestamp}`, { withCredentials: true });
+      
+      // Only update if data actually changed (compare by JSON to avoid unnecessary re-renders)
+      setLeaderboardData(prevData => {
+        if (JSON.stringify(prevData?.leaderboard) === JSON.stringify(response.data?.leaderboard)) {
+          return prevData; // No change, keep old reference
+        }
+        return response.data;
+      });
+      setTotalStats(response.data);
+      setError(null);
+      
+      // Restore scroll position
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPosition);
+      });
+      
+      logger.debug('📊 Leaderboard: Background refresh complete', {
+        entries: response.data?.leaderboard?.length || 0,
+      });
+    } catch (err: any) {
+      console.error('Error in background fetch:', err);
+      // Don't update error state on background fetch failure
+    }
+  }, [timeframe, limit]);
+
+  // WebSocket and event-driven updates - NO polling interval
   useEffect(() => {
+    // Handle avatar update - only update refresh key and fetch on actual change
     const handleAvatarUpdate = (data?: any) => {
-      console.log('🔄 Leaderboard: Avatar update received', data);
-      // Update refresh key to force image reload
+      logger.debug('🔄 Leaderboard: Avatar update received', data);
       setAvatarRefreshKey(Date.now());
-      // Refresh leaderboard when avatar is updated
-      fetchLeaderboard();
+      backgroundFetchLeaderboard();
     };
 
-    // Listen for custom event (from user dashboard)
+    // Handle data update (from verification bot, etc.)
+    const handleDataUpdate = (data?: any) => {
+      logger.debug('🔄 Leaderboard: Data update received', data);
+      backgroundFetchLeaderboard();
+    };
+
     window.addEventListener('avatar-updated', handleAvatarUpdate);
     
-    // Listen for WebSocket events (global broadcast for all users)
     if (socket) {
-      console.log('🔌 Leaderboard: Setting up WebSocket listener');
-      socket.on('leaderboard-avatar-update', (data) => {
-        console.log('🔌 Leaderboard: WebSocket event received', data);
-        handleAvatarUpdate(data);
-      });
-    } else {
-      console.warn('⚠️ Leaderboard: WebSocket not available');
+      logger.debug('🔌 Leaderboard: Setting up WebSocket listeners');
+      socket.on('leaderboard-avatar-update', handleAvatarUpdate);
+      socket.on('leaderboard-data-update', handleDataUpdate);
     }
     
-    // Also set up a periodic refresh every 10 seconds to catch any updates (more frequent)
-    const interval = setInterval(() => {
-      setAvatarRefreshKey(Date.now());
-      fetchLeaderboard();
-    }, 10000);
+    // NO automatic polling - rely on WebSocket events for real-time updates
+    // This prevents the "refreshing every few seconds" issue
+    // Data will update when:
+    // 1. User changes timeframe/limit filters
+    // 2. WebSocket emits avatar update
+    // 3. WebSocket emits data update (from verification bot)
+    // 4. User triggers manual refresh via page navigation
 
     return () => {
       window.removeEventListener('avatar-updated', handleAvatarUpdate);
       if (socket) {
         socket.off('leaderboard-avatar-update', handleAvatarUpdate);
+        socket.off('leaderboard-data-update', handleDataUpdate);
       }
-      clearInterval(interval);
     };
-  }, [fetchLeaderboard, socket]);
+  }, [socket, backgroundFetchLeaderboard]); // Include socket and backgroundFetchLeaderboard in deps
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -350,7 +379,7 @@ const LeaderboardPage: React.FC = () => {
                   <div className="absolute inset-0 bg-gray-400/30 blur-xl rounded-full" />
                   {leaderboardData.leaderboard[1].avatarUrl ? (
                     <img 
-                      src={leaderboardData.leaderboard[1].avatarUrl} 
+                      src={`${leaderboardData.leaderboard[1].avatarUrl}?v=${avatarRefreshKey}`} 
                       alt="2nd Place" 
                       className="relative w-16 h-16 rounded-full border-4 border-gray-300 shadow-lg z-10 object-cover"
                       onError={(e) => {
@@ -385,7 +414,7 @@ const LeaderboardPage: React.FC = () => {
                   <div className="absolute inset-0 bg-yellow-500/40 blur-xl rounded-full animate-pulse" />
                   {leaderboardData.leaderboard[0].avatarUrl ? (
                     <img 
-                      src={leaderboardData.leaderboard[0].avatarUrl} 
+                      src={`${leaderboardData.leaderboard[0].avatarUrl}?v=${avatarRefreshKey}`} 
                       alt="1st Place" 
                       className="relative w-20 h-20 rounded-full border-4 border-yellow-400 shadow-xl z-10 object-cover"
                       onError={(e) => {
@@ -423,7 +452,7 @@ const LeaderboardPage: React.FC = () => {
                   <div className="absolute inset-0 bg-orange-500/30 blur-xl rounded-full" />
                   {leaderboardData.leaderboard[2].avatarUrl ? (
                     <img 
-                      src={leaderboardData.leaderboard[2].avatarUrl} 
+                      src={`${leaderboardData.leaderboard[2].avatarUrl}?v=${avatarRefreshKey}`} 
                       alt="3rd Place" 
                       className="relative w-16 h-16 rounded-full border-4 border-orange-400 shadow-lg z-10 object-cover"
                       onError={(e) => {
@@ -571,12 +600,9 @@ const LeaderboardPage: React.FC = () => {
                       entry.user_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                       entry.eightBallPoolId.includes(searchQuery)
                     )
-                    .map((entry, index) => (
-                    <motion.div
+                    .map((entry) => (
+                    <div
                       key={entry.user_id || entry.eightBallPoolId}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
                       className={`p-4 md:px-6 md:py-4 hover:bg-gray-50/80 dark:hover:bg-white/5 transition-colors ${
                         entry.rank <= 3 ? 'bg-gradient-to-r from-transparent via-transparent to-transparent' : ''
                       } ${
@@ -692,7 +718,7 @@ const LeaderboardPage: React.FC = () => {
                           }) : 'Never'}
                         </div>
                       </div>
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
               )}

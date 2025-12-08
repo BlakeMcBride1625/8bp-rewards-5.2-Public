@@ -6,6 +6,7 @@ import axios from 'axios';
 import { API_ENDPOINTS, getAdminUserBlockEndpoint, getAdminRegistrationDeleteEndpoint } from '../config/api';
 import { useVPSStats } from '../hooks/useWebSocket';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { logger } from '../utils/logger';
 import PostgreSQLDBManager from '../components/PostgreSQLDBManager';
 import SupportTicketsManager from '../components/SupportTicketsManager';
 import { 
@@ -344,7 +345,7 @@ const AdminDashboardPage: React.FC = () => {
     
     // Debounce the API call by 1 second
     const timeout = setTimeout(async () => {
-      console.log('🔄 Starting to fetch bot status...');
+      logger.debug('🔄 Starting to fetch bot status...');
       setIsLoadingBotStatus(true);
       
       try {
@@ -710,7 +711,7 @@ const AdminDashboardPage: React.FC = () => {
   const fetchActiveServices = useCallback(async () => {
     setIsLoadingActiveServices(true);
     try {
-      console.log('🔄 Fetching active services...');
+      logger.debug('🔄 Fetching active services...');
       // Add timestamp to prevent caching
       const timestamp = Date.now();
       const response = await axios.get(`${API_ENDPOINTS.ADMIN_ACTIVE_SERVICES}?t=${timestamp}`, {
@@ -781,7 +782,7 @@ const AdminDashboardPage: React.FC = () => {
 
     setIsClearingScreenshots(true);
     try {
-      const response = await axios.post('/api/admin/screenshots/clear-user', {
+      const response = await axios.post('/8bp-rewards/api/admin/screenshots/clear-user', {
         userQuery: screenshotUserQuery.trim()
       }, { withCredentials: true });
       
@@ -808,7 +809,7 @@ const AdminDashboardPage: React.FC = () => {
 
     setIsClearingScreenshots(true);
     try {
-      const response = await axios.post('/api/admin/screenshots/clear-all', {}, { withCredentials: true });
+      const response = await axios.post('/8bp-rewards/api/admin/screenshots/clear-all', {}, { withCredentials: true });
       
       toast.success(response.data.message || 'All screenshots cleared successfully');
       // Refresh the screenshot list after clearing
@@ -829,15 +830,15 @@ const AdminDashboardPage: React.FC = () => {
     
     // Debounce the API call by 1 second
     const timeout = setTimeout(async () => {
-      console.log('🔄 Starting to fetch screenshot folders...');
-      console.log('🔄 Current activeTab:', activeTab);
-      console.log('🔄 isAuthenticated:', isAuthenticated);
-      console.log('🔄 isAdmin:', isAdmin);
+      logger.debug('🔄 Starting to fetch screenshot folders...');
+      logger.debug('🔄 Current activeTab:', activeTab);
+      logger.debug('🔄 isAuthenticated:', isAuthenticated);
+      logger.debug('🔄 isAdmin:', isAdmin);
       setIsLoadingScreenshots(true);
       
       try {
-        console.log('📡 Making API call to /api/admin/screenshots/folders');
-        const response = await axios.get('/api/admin/screenshots/folders', { withCredentials: true });
+        console.log('📡 Making API call to /8bp-rewards/api/admin/screenshots/folders');
+        const response = await axios.get('/8bp-rewards/api/admin/screenshots/folders', { withCredentials: true });
         console.log('✅ API response received:', response.data);
         setAllScreenshotFolders(response.data.folders);
         // Apply current search filter if any
@@ -1123,7 +1124,7 @@ const AdminDashboardPage: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated || !isAdmin) return;
     
-    console.log('🔄 useEffect triggered:', { isAuthenticated, isAdmin, activeTab });
+    logger.debug('🔄 useEffect triggered:', { isAuthenticated, isAdmin, activeTab });
     
     // Debounce rapid tab switches to prevent excessive API calls
     const timeoutId = setTimeout(() => {
@@ -1140,7 +1141,7 @@ const AdminDashboardPage: React.FC = () => {
           fetchVpsStats();
           break;
         case 'screenshots':
-          console.log('🔄 Calling fetchScreenshotFolders because activeTab is screenshots');
+          logger.debug('🔄 Calling fetchScreenshotFolders because activeTab is screenshots');
           fetchScreenshotFolders();
           break;
         case 'verification-images':
@@ -3315,7 +3316,7 @@ const AdminDashboardPage: React.FC = () => {
                             <div key={file.name} className="group relative">
                               <div className="aspect-video bg-gray-100 dark:bg-background-dark-tertiary rounded-lg overflow-hidden border border-gray-200 dark:border-dark-accent-navy">
                                 <img
-                                  src={`/api/admin/screenshots/view/${folder.name}/${file.name}`}
+                                  src={`/8bp-rewards/api/admin/screenshots/view/${folder.name}/${file.name}`}
                                   alt={file.name}
                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                                   onError={(e) => {
