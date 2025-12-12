@@ -14,11 +14,8 @@ router.use(authenticateAdmin);
 // Get screenshot folders and their contents
 router.get('/folders', async (req, res) => {
   try {
-    // Use absolute path - screenshots are in /app/screenshots in container
-    const screenshotsDir = process.env.SCREENSHOTS_BASE_DIR || 
-      (process.env.NODE_ENV === 'production' 
-        ? '/app/screenshots'
-        : path.join(__dirname, '../../../../../screenshots'));
+    // Use absolute path - always use project root-relative path
+    const screenshotsDir = process.env.SCREENSHOTS_BASE_DIR || path.join(process.cwd(), 'screenshots');
     const folders = [
       { name: 'confirmation', displayName: 'Confirmation Images' },
       { name: 'shop-page', displayName: 'Shop Page Screenshots' },
@@ -128,11 +125,8 @@ router.get('/view/:folder/:filename', async (req, res) => {
       });
     }
 
-    // Use absolute path - screenshots are in /app/screenshots in container
-    const screenshotsDir = process.env.SCREENSHOTS_BASE_DIR || 
-      (process.env.NODE_ENV === 'production' 
-        ? '/app/screenshots'
-        : path.join(__dirname, '../../../../../screenshots'));
+    // Use absolute path - always use project root-relative path
+    const screenshotsDir = process.env.SCREENSHOTS_BASE_DIR || path.join(process.cwd(), 'screenshots');
     const imagePath = path.join(screenshotsDir, folder, filename);
 
     if (!fs.existsSync(imagePath)) {

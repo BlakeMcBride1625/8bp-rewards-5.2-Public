@@ -153,3 +153,6 @@ If issues occur:
 - `unique_links` → enforced via unique constraint on `registrations.eight_ball_pool_id`
 
 
+
+
+

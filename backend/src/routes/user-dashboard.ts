@@ -14,7 +14,67 @@ import multer from 'multer';
 const router = express.Router();
 const dbService = DatabaseService.getInstance();
 
-// Apply user authentication to all routes
+// Public routes (no authentication required)
+// Get list of available 8 Ball Pool avatars
+router.get('/8bp-avatars/list', async (req, res): Promise<void> => {
+  try {
+    // Always use path relative to project root - works in both dev and production
+    const avatarsDir = path.join(process.cwd(), 'frontend', '8 Ball Pool Avatars');
+    
+    logger.info('Listing 8BP avatars', {
+      action: 'list_8bp_avatars',
+      avatarsDir,
+      exists: fs.existsSync(avatarsDir),
+      cwd: process.cwd()
+    });
+    
+    if (!fs.existsSync(avatarsDir)) {
+      logger.error('Avatars directory not found', {
+        action: 'avatars_dir_not_found',
+        avatarsDir,
+        cwd: process.cwd()
+      });
+      res.status(404).json({
+        success: false,
+        error: 'Avatars directory not found'
+      });
+      return;
+    }
+
+    const files = fs.readdirSync(avatarsDir);
+    const avatarFiles = files
+      .filter(file => {
+        const ext = path.extname(file).toLowerCase();
+        return ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext) && file !== '.DS_Store';
+      })
+      .map(file => ({
+        filename: file,
+        url: `/8bp-rewards/avatars/${file}`
+      }))
+      .sort((a, b) => {
+        // Sort by number in filename if possible
+        const numA = parseInt(a.filename.match(/\d+/)?.[0] || '0');
+        const numB = parseInt(b.filename.match(/\d+/)?.[0] || '0');
+        return numA - numB;
+      });
+
+    res.json({
+      success: true,
+      avatars: avatarFiles
+    });
+  } catch (error) {
+    logger.error('Error listing 8 Ball Pool avatars', {
+      action: 'list_8bp_avatars_error',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to list avatars'
+    });
+  }
+});
+
+// Apply user authentication to all routes below this point
 router.use(authenticateUser);
 
 // Get user's linked accounts
@@ -599,7 +659,7 @@ router.get('/verification-images', async (req, res): Promise<void> => {
     const verificationsDir = process.env.VERIFICATIONS_DIR || 
       (process.env.NODE_ENV === 'production' 
         ? '/app/services/verification-bot/verifications'
-        : path.join(__dirname, '../../../../services/verification-bot/verifications'));
+        : path.join(process.cwd(), 'services', 'verification-bot', 'verifications'));
 
     if (!fs.existsSync(verificationsDir)) {
       logger.info('Verifications directory does not exist', {
@@ -857,10 +917,7 @@ router.get('/screenshots/view/:filename', async (req, res) => {
     }
 
     // Use absolute path for screenshots directory
-    const screenshotsDir = process.env.SCREENSHOTS_DIR || 
-      (process.env.NODE_ENV === 'production' 
-        ? '/app/screenshots/confirmation'
-        : path.join(__dirname, '../../../../screenshots/confirmation'));
+    const screenshotsDir = process.env.SCREENSHOTS_DIR || path.join(process.cwd(), 'screenshots', 'confirmation');
     const imagePath = path.join(screenshotsDir, filename);
 
     logger.info('Serving screenshot', {
@@ -3140,67 +3197,6 @@ router.put('/username/discord-toggle', async (req, res): Promise<void> => {
     res.status(500).json({
       success: false,
       error: 'Failed to toggle Discord username'
-    });
-  }
-});
-
-// Get list of available 8 Ball Pool avatars
-router.get('/8bp-avatars/list', async (req, res): Promise<void> => {
-  try {
-    // Use absolute path - in Docker container, avatars are at /app/frontend/8 Ball Pool Avatars
-    const avatarsDir = process.env.NODE_ENV === 'production'
-      ? '/app/frontend/8 Ball Pool Avatars'
-      : path.join(__dirname, '../../../../frontend/8 Ball Pool Avatars');
-    
-    logger.info('Listing 8BP avatars', {
-      action: 'list_8bp_avatars',
-      avatarsDir,
-      exists: fs.existsSync(avatarsDir),
-      cwd: process.cwd()
-    });
-    
-    if (!fs.existsSync(avatarsDir)) {
-      logger.error('Avatars directory not found', {
-        action: 'avatars_dir_not_found',
-        avatarsDir,
-        cwd: process.cwd()
-      });
-      res.status(404).json({
-        success: false,
-        error: 'Avatars directory not found'
-      });
-      return;
-    }
-
-    const files = fs.readdirSync(avatarsDir);
-    const avatarFiles = files
-      .filter(file => {
-        const ext = path.extname(file).toLowerCase();
-        return ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext) && file !== '.DS_Store';
-      })
-      .map(file => ({
-        filename: file,
-        url: `/8bp-rewards/avatars/${file}`
-      }))
-      .sort((a, b) => {
-        // Sort by number in filename if possible
-        const numA = parseInt(a.filename.match(/\d+/)?.[0] || '0');
-        const numB = parseInt(b.filename.match(/\d+/)?.[0] || '0');
-        return numA - numB;
-      });
-
-    res.json({
-      success: true,
-      avatars: avatarFiles
-    });
-  } catch (error) {
-    logger.error('Error listing 8 Ball Pool avatars', {
-      action: 'list_8bp_avatars_error',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-    res.status(500).json({
-      success: false,
-      error: 'Failed to list avatars'
     });
   }
 });

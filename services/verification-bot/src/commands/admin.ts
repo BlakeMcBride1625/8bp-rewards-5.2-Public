@@ -5,6 +5,7 @@ import { databaseService } from '../services/database';
 import { roleManager } from '../services/roleManager';
 import { rankMatcher } from '../services/rankMatcher';
 import { logger } from '../services/logger';
+import { handleFixRoles } from './fixroles';
 
 /**
  * Handle admin commands
@@ -28,6 +29,8 @@ export async function handleAdminCommand(
       return await handleLogs(message);
     case 'instructions':
       return await handleInstructions(message);
+    case 'fixroles':
+      return await handleFixRoles(message);
     default:
       return false;
   }

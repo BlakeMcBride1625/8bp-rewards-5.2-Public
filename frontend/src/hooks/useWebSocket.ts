@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { WEBSOCKET_URL } from '../config/api';
+import { logger } from '../utils/logger';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -58,13 +59,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     socket.on('connect', () => {
       setStatus('connected');
       setIsConnected(true);
-      console.log('WebSocket connected:', socket.id);
+      logger.debug('WebSocket connected:', socket.id);
     });
 
     socket.on('disconnect', (reason) => {
       setStatus('disconnected');
       setIsConnected(false);
-      console.log('WebSocket disconnected:', reason);
+      logger.debug('WebSocket disconnected:', reason);
       
       // If disconnected due to server closing or transport close, try to reconnect
       if (reason === 'io server disconnect' || reason === 'transport close') {
@@ -81,12 +82,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     socket.on('reconnect', (attemptNumber) => {
       setStatus('connected');
       setIsConnected(true);
-      console.log('WebSocket reconnected after', attemptNumber, 'attempts');
+      logger.debug('WebSocket reconnected after', attemptNumber, 'attempts');
     });
 
     socket.on('reconnect_attempt', (attemptNumber) => {
       setStatus('connecting');
-      console.log('WebSocket reconnection attempt', attemptNumber);
+      logger.debug('WebSocket reconnection attempt', attemptNumber);
     });
 
     socket.on('reconnect_error', (error) => {

@@ -1,6 +1,6 @@
-import { Pool } from 'pg';
 import { logger } from './LoggerService';
 import { DeviceInfo } from './DeviceDetectionService';
+import { DatabaseService } from './DatabaseService';
 
 export interface BlockedDevice {
   id: string;
@@ -20,31 +20,17 @@ export interface BlockedDevice {
 
 export class BlockingService {
   private static instance: BlockingService;
-  private pool: Pool | null = null;
+  private dbService: DatabaseService;
+
+  private constructor() {
+    this.dbService = DatabaseService.getInstance();
+  }
 
   public static getInstance(): BlockingService {
     if (!BlockingService.instance) {
       BlockingService.instance = new BlockingService();
     }
     return BlockingService.instance;
-  }
-
-  private async getPool(): Promise<Pool> {
-    if (!this.pool) {
-      this.pool = new Pool({
-        host: process.env.POSTGRES_HOST || 'localhost',
-        port: parseInt(process.env.POSTGRES_PORT || '5432'),
-        database: process.env.POSTGRES_DB || '8bp_rewards',
-        user: process.env.POSTGRES_USER || 'admin',
-        password: process.env.POSTGRES_PASSWORD || '',
-        ssl: process.env.POSTGRES_SSL === 'true' ? { rejectUnauthorized: false } : false,
-        max: 20,
-        min: 5,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000
-      });
-    }
-    return this.pool;
   }
 
   /**
@@ -58,8 +44,6 @@ export class BlockingService {
     blockedBy: string = 'admin',
     reason?: string
   ): Promise<BlockedDevice> {
-    const pool = await this.getPool();
-    
     try {
       const sql = `
         INSERT INTO blocked_devices (
@@ -83,7 +67,7 @@ export class BlockingService {
         true
       ];
 
-      const result = await pool.query(sql, values);
+      const result = await this.dbService.executeQuery(sql, values);
       const row = result.rows[0];
       
       const blockedDevice: BlockedDevice = {
@@ -132,8 +116,6 @@ export class BlockingService {
    * Check if a device/IP is blocked
    */
   public async isBlocked(deviceInfo: DeviceInfo, ip: string): Promise<BlockedDevice | null> {
-    const pool = await this.getPool();
-    
     try {
       const sql = `
         SELECT * FROM blocked_devices 
@@ -148,7 +130,7 @@ export class BlockingService {
       `;
       
       const values = [ip, deviceInfo.deviceId, deviceInfo.deviceType, deviceInfo.userAgent];
-      const result = await pool.query(sql, values);
+      const result = await this.dbService.executeQuery(sql, values);
       
       if (result.rows.length > 0) {
         logger.info('Blocked device detected', {
@@ -179,8 +161,6 @@ export class BlockingService {
    * Unblock a device
    */
   public async unblockDevice(blockedDeviceId: string, unblockedBy: string = 'admin'): Promise<boolean> {
-    const pool = await this.getPool();
-    
     try {
       const sql = `
         UPDATE blocked_devices 
@@ -189,7 +169,7 @@ export class BlockingService {
         RETURNING *
       `;
       
-      const result = await pool.query(sql, [blockedDeviceId]);
+      const result = await this.dbService.executeQuery(sql, [blockedDeviceId]);
       
       if (result.rows.length > 0) {
         logger.info('Device unblocked successfully', {
@@ -219,8 +199,6 @@ export class BlockingService {
    * Get all blocked devices
    */
   public async getBlockedDevices(limit: number = 50, offset: number = 0): Promise<BlockedDevice[]> {
-    const pool = await this.getPool();
-    
     try {
       const sql = `
         SELECT * FROM blocked_devices 
@@ -228,8 +206,8 @@ export class BlockingService {
         LIMIT $1 OFFSET $2
       `;
       
-      const result = await pool.query(sql, [limit, offset]);
-      return result.rows.map(row => ({
+      const result = await this.dbService.executeQuery(sql, [limit, offset]);
+      return result.rows.map((row: any) => ({
         id: row.id,
         ipAddress: row.ip_address,
         deviceId: row.device_id,
@@ -257,11 +235,9 @@ export class BlockingService {
    * Get blocked devices count
    */
   public async getBlockedDevicesCount(): Promise<number> {
-    const pool = await this.getPool();
-    
     try {
       const sql = 'SELECT COUNT(*) as count FROM blocked_devices WHERE is_active = true';
-      const result = await pool.query(sql);
+      const result = await this.dbService.executeQuery(sql);
       return parseInt(result.rows[0].count);
     } catch (error) {
       logger.error('Failed to get blocked devices count', {
@@ -280,12 +256,10 @@ export class BlockingService {
     blockedBy: string = 'admin',
     reason?: string
   ): Promise<BlockedDevice[]> {
-    const pool = await this.getPool();
-    
     try {
       // First, get all device info for this user
       const userSql = 'SELECT * FROM registrations WHERE eight_ball_pool_id = $1';
-      const userResult = await pool.query(userSql, [eightBallPoolId]);
+      const userResult = await this.dbService.executeQuery(userSql, [eightBallPoolId]);
       
       if (userResult.rows.length === 0) {
         throw new Error('User not found');

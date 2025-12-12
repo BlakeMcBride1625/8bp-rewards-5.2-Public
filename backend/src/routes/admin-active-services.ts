@@ -9,6 +9,9 @@ const router = Router();
 // Active Services endpoint - shows ALL running processes
 router.get('/active-services', authenticateAdmin, async (req, res) => {
   try {
+    // Cache for 30 seconds to reduce load
+    res.set('Cache-Control', 'private, max-age=30');
+    
     const { exec } = require('child_process');
     const { promisify } = require('util');
     const execAsync = promisify(exec);

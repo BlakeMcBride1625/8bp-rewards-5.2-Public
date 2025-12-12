@@ -52,6 +52,7 @@ class LoggerService {
 
   private async initDatabaseConnection(): Promise<void> {
     try {
+      // Reduced pool size for logger (separate pool needed to avoid circular dependency with DatabaseService)
       this.dbPool = new Pool({
         host: process.env.POSTGRES_HOST || 'localhost',
         port: parseInt(process.env.POSTGRES_PORT || '5432'),
@@ -59,14 +60,14 @@ class LoggerService {
         user: process.env.POSTGRES_USER || 'admin',
         password: process.env.POSTGRES_PASSWORD || '',
         ssl: process.env.POSTGRES_SSL === 'true' ? { rejectUnauthorized: false } : false,
-        // Connection pool settings to prevent disconnections
-        max: 20,
-        min: 5,
+        // Minimized pool for logging only (reduced from max:20 to max:3)
+        max: 3,
+        min: 1,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 2000
       });
       this.isConnected = true;
-      console.log('✅ Logger database connection initialized with pooling');
+      console.log('✅ Logger database connection initialized with minimal pooling');
     } catch (error) {
       console.error('❌ Failed to initialize logger database connection:', error);
       this.isConnected = false;

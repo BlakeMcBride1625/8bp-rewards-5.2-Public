@@ -36,3 +36,6 @@ ON CONFLICT (discord_id) DO UPDATE SET
   updated_at = EXCLUDED.updated_at;
 
 
+
+
+

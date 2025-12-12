@@ -4129,10 +4129,7 @@ router.get('/verification-images/view/:filename', async (req, res): Promise<void
       return;
     }
 
-    const verificationsDir = process.env.VERIFICATIONS_DIR || 
-      (process.env.NODE_ENV === 'production' 
-        ? '/app/services/verification-bot/verifications'
-        : path.join(__dirname, '../../../../services/verification-bot/verifications'));
+    const verificationsDir = process.env.VERIFICATIONS_DIR || path.join(process.cwd(), 'services', 'verification-bot', 'verifications');
     const imagePath = path.join(verificationsDir, filename);
 
     if (!fs.existsSync(imagePath)) {

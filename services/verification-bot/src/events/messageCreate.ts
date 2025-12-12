@@ -670,17 +670,33 @@ export async function handleMessageCreate(message: Message): Promise<void> {
           account.level > highest.level ? account : highest, existingAccounts[0])
       : null;
     
-    logger.info('Processing verification - all accounts will be fully processed', {
+    // Determine which account should determine the Discord role
+    // Always use the highest level account across all verified accounts
+    const roleLevel = highestLevelAccount && highestLevelAccount.level > levelDetected
+      ? highestLevelAccount.level
+      : levelDetected;
+    const roleRankName = highestLevelAccount && highestLevelAccount.level > levelDetected
+      ? highestLevelAccount.rank_name
+      : matchedRank.rank_name;
+    
+    // Find the rank config for the role to assign
+    const rankMatcherService = require('../services/rankMatcher').rankMatcher;
+    const roleRankConfig = rankMatcherService.getRankByName(roleRankName);
+    
+    logger.info('Processing verification - determining Discord role from highest account', {
       user_id: message.author.id,
       existing_accounts_count: existingAccounts.length,
       new_account_level: levelDetected,
       new_account_rank: matchedRank.rank_name,
       highest_existing_level: highestLevelAccount?.level || null,
       highest_existing_rank: highestLevelAccount?.rank_name || null,
+      role_level_selected: roleLevel,
+      role_rank_selected: roleRankName,
+      using_highest_account: highestLevelAccount && highestLevelAccount.level > levelDetected,
     });
 
-    // Assign role
-    await roleManager.assignRankRole(member, {
+    // Assign role based on the HIGHEST level account
+    await roleManager.assignRankRole(member, roleRankConfig || {
       role_id: matchedRank.role_id,
       rank_name: matchedRank.rank_name,
       level_min: matchedRank.level_min,

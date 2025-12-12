@@ -137,6 +137,7 @@ async function handleHelp(message: Message): Promise<boolean> {
         '`!recheck <@user>` - Re-process user\'s latest verification',
         '`!setrank <@user> <rank>` - Manually set a user\'s rank',
         '`!removerank <@user>` - Remove a user\'s rank and verification',
+        '`!fixroles` - Update all users\' roles based on their highest level account',
         '`!purgedb` - Purge all verification records (requires confirmation)',
         '`!logs` - Get the path to the log file',
         '`!instructions` - Resend verification channel instructions',
